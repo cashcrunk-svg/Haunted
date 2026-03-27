@@ -803,9 +803,65 @@
     ];
 
     // Furniture — valid surfaces for camera placement (not the floor)
-    // Each entry: { x, y, w, h, label }
+    // Each entry: { x, y, w, h, label, style? }
+    // style: "wood" (default) | "bed" | "counter" | "seat"
     const furniture = [
-      { x:306, y:694, w:30, h:18, label:"Nightstand" }, // Foyer bottom-left corner
+      // ── Foyer (300,600 → 500,720) ─────────────────────────────────────────
+      { x:303, y:606, w:36, h:14, label:"Console Table", style:"wood"    }, // west wall — camera surface; clear of all doors
+      { x:303, y:650, w:28, h:14, label:"Bench",         style:"seat"    }, // west wall — entry seating
+
+      // ── Living Room (360,80 → 560,460) ────────────────────────────────────
+      { x:396, y:83,  w:84, h:15, label:"TV Stand",      style:"wood"    }, // north wall — camera surface
+      { x:384, y:340, w:128,h:26, label:"Couch",         style:"seat"    }, // south center, facing TV
+      { x:415, y:282, w:68, h:22, label:"Coffee Table",  style:"wood"    }, // center — camera surface
+      { x:374, y:292, w:20, h:20, label:"Side Table",    style:"wood"    }, // west (clear of hallway door at y:187-213)
+      { x:526, y:292, w:20, h:20, label:"Side Table",    style:"wood"    }, // east side
+      { x:535, y:88,  w:18, h:55, label:"Bookshelf",     style:"wood"    }, // east wall — camera surface
+
+      // ── Dining Room (560,80 → 740,240) ────────────────────────────────────
+      { x:600, y:112, w:100,h:52, label:"Dining Table",  style:"wood"    }, // center — camera surface
+      { x:725, y:88,  w:12, h:48, label:"Sideboard",     style:"wood"    }, // east wall — camera surface
+
+      // ── Kitchen (560,240 → 740,400) ───────────────────────────────────────
+      { x:565, y:382, w:96, h:14, label:"Counter",       style:"counter" }, // south wall — camera surface
+      { x:725, y:248, w:12, h:90, label:"Counter",       style:"counter" }, // east wall  — camera surface
+      { x:565, y:248, w:12, h:70, label:"Counter",       style:"counter" }, // west wall (partial)
+      { x:613, y:296, w:62, h:24, label:"Island",        style:"counter" }, // center island — camera surface
+
+      // ── Garage (560,500 → 740,720) ────────────────────────────────────────
+      { x:565, y:694, w:162,h:18, label:"Workbench",     style:"wood"    }, // south wall — camera surface
+      { x:723, y:506, w:14, h:90, label:"Shelf",         style:"wood"    }, // east wall  — camera surface
+      { x:565, y:506, w:20, h:40, label:"Tool Cabinet",  style:"wood"    }, // NW corner
+
+      // ── Master Bed (80,460 → 300,600) ─────────────────────────────────────
+      { x:146, y:464, w:92, h:55, label:"Bed",           style:"bed"     }, // north wall — queen bed
+      { x:118, y:468, w:18, h:24, label:"Nightstand",    style:"wood"    }, // left of bed  — camera surface
+      { x:242, y:468, w:18, h:24, label:"Nightstand",    style:"wood"    }, // right of bed — camera surface
+      { x:84,  y:572, w:55, h:16, label:"Dresser",       style:"wood"    }, // SW corner    — camera surface
+
+      // ── Study (360,460 → 500,600) ─────────────────────────────────────────
+      { x:364, y:466, w:12, h:56, label:"Bookshelf",     style:"wood"    }, // west wall
+      { x:462, y:466, w:14, h:72, label:"Desk",          style:"wood"    }, // east wall — camera surface
+
+      // ── Bedroom 2 (80,80 → 300,280) ───────────────────────────────────────
+      { x:126, y:84,  w:100,h:55, label:"Bed",           style:"bed"     }, // north wall — full bed
+      { x:106, y:88,  w:18, h:24, label:"Nightstand",    style:"wood"    }, // left of bed  — camera surface
+      { x:229, y:88,  w:18, h:24, label:"Nightstand",    style:"wood"    }, // right of bed — camera surface
+      { x:188, y:266, w:58, h:12, label:"Dresser",       style:"wood"    }, // south wall   — camera surface
+
+      // ── Walk-in (80,380 → 180,460) ────────────────────────────────────────
+      { x:84,  y:388, w:80, h:14, label:"Shelf",         style:"wood"    }, // north wall
+
+      // ── Utility (560,400 → 740,500) ───────────────────────────────────────
+      { x:565, y:408, w:30, h:24, label:"Washer/Dryer",  style:"counter" }, // west wall
+
+      // ── Master Bath (80,600 → 240,720) ────────────────────────────────────
+      { x:84,  y:606, w:72, h:18, label:"Vanity",        style:"counter" }, // north wall
+      { x:174, y:606, w:50, h:38, label:"Bathtub",       style:"counter" }, // NE area
+
+      // ── Main Bath (80,280 → 240,380) ──────────────────────────────────────
+      { x:84,  y:286, w:55, h:16, label:"Vanity",        style:"counter" }, // west wall
+      { x:165, y:284, w:48, h:38, label:"Bathtub",       style:"counter" }, // east area
     ];
 
     // Placement preview state — used for Video Camera furniture/tripod placement
@@ -2811,18 +2867,27 @@
           px >= fRoom.x && px < fRoom.x + fRoom.w &&
           py >= fRoom.y && py < fRoom.y + fRoom.h;
         if (!playerInRoom) continue;
-        // Top surface — warm wood tone
-        ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(f.x + 2, f.y + 3, f.w, f.h); // shadow
-        ctx.fillStyle = "#7a5230"; ctx.fillRect(f.x, f.y, f.w, f.h);
-        ctx.fillStyle = "#9a6a40"; ctx.fillRect(f.x + 1, f.y + 1, f.w - 2, f.h - 3);
-        ctx.fillStyle = "#b07840"; ctx.fillRect(f.x + 2, f.y + 1, f.w - 4, 3); // top highlight
-        ctx.fillStyle = "#5a3a18"; ctx.fillRect(f.x, f.y + f.h - 3, f.w, 3);   // front face shadow
-        // Small drawer line
-        ctx.strokeStyle = "#5a3a18"; ctx.lineWidth = 0.8;
-        ctx.beginPath(); ctx.moveTo(f.x + 4, f.y + f.h / 2); ctx.lineTo(f.x + f.w - 4, f.y + f.h / 2); ctx.stroke();
-        // Drawer knob
-        ctx.fillStyle = "#c8a040";
-        ctx.beginPath(); ctx.arc(f.x + f.w / 2, f.y + f.h / 2 + 2, 2, 0, Math.PI * 2); ctx.fill();
+        // Style palette: wood (default) | bed | counter | seat
+        const fs = f.style || "wood";
+        const [cBase, cTop, cHi, cFront, cAccent] =
+          fs === "bed"     ? ["#2a2038","#3c2e50","#4e3e66","#1e1830","#6a5488"] :
+          fs === "counter" ? ["#2a2826","#3c3830","#4a4440","#201e1c","#555048"] :
+          fs === "seat"    ? ["#3a2a1e","#5a3e2a","#724e38","#2a1c14","#8a6248"] :
+                             ["#7a5230","#9a6a40","#b07840","#5a3a18","#c8a040"]; // wood
+        ctx.fillStyle = "rgba(0,0,0,0.28)"; ctx.fillRect(f.x + 2, f.y + 3, f.w, f.h); // drop shadow
+        ctx.fillStyle = cBase;  ctx.fillRect(f.x,     f.y,     f.w,     f.h);
+        ctx.fillStyle = cTop;   ctx.fillRect(f.x + 1, f.y + 1, f.w - 2, f.h - 3);
+        ctx.fillStyle = cHi;    ctx.fillRect(f.x + 2, f.y + 1, f.w - 4, 3);       // top-edge highlight
+        ctx.fillStyle = cFront; ctx.fillRect(f.x,     f.y + f.h - 3, f.w, 3);    // front-face shadow
+        // Detail: drawer line + accent — skip on very thin counter slabs
+        if (f.h >= 16 && fs !== "counter") {
+          ctx.strokeStyle = cFront; ctx.lineWidth = 0.8;
+          ctx.beginPath(); ctx.moveTo(f.x + 4, f.y + f.h / 2); ctx.lineTo(f.x + f.w - 4, f.y + f.h / 2); ctx.stroke();
+          if (fs === "wood") { // knob only on wood storage pieces
+            ctx.fillStyle = cAccent;
+            ctx.beginPath(); ctx.arc(f.x + f.w / 2, f.y + f.h / 2 + 2, 2, 0, Math.PI * 2); ctx.fill();
+          }
+        }
       }
 
       // World items — dropped/placed by player
