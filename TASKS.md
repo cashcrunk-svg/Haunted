@@ -1,0 +1,143 @@
+# Tasks
+
+## Current
+- [x] Ghost flash event: pale rect appears/fades at random floor positions after safe time
+- [x] Roaming ghost entity (bounces diagonally, visible after safe time)
+- [x] House shell layout: 9 rooms placed and aligned (edges snap cleanly)
+- [x] Redesigned house layout: 12 rooms, hallway spine, foyer, garage/laundry, master suite, kids wing, kitchen
+- [x] Connect rooms with doorway walkable rects (11 open-gap connectors)
+- [x] Wall collision fix: canMoveTo now requires full player containment inside one walkable rect
+- [x] Verify doorway traversal with debug overlay, then remove DEBUG_COLLISION flag
+- [x] House shell fill: wall gaps now read as wall material (dark warm brown #2a2018)
+- [x] Scale house layout 1.5x: all room/doorway/spawn/exit/ghost-bound coords multiplied by 1.5
+- [x] Camera-follow system: world drawn with ctx.translate offset; HUD stays screen-fixed
+- [x] Visual wall system: walls[] array with 9 segments drawn before rooms (visual only, no collision change)
+- [x] Closet/storage spaces: 6 new walkable rooms + 5 connectors; kids rooms shrunk h:180→h:120
+- [x] Closet/storage refinement: kids closets shrunk, garage storage isolated with one entrance, house shell removed
+- [x] Layout refinement: walk-in snapped, kitchen extended south, kids closets flush-left, walls updated
+- [x] House layout redesign: original layout inspired by suburban horror feel — 14 rooms, new flow (Foyer→Hallway→wings), master chain, garage via utility, Study dead-end, coat closet
+- [x] Outside area: front yard, driveway, street, van; foyer+garage exit via connectors; exit zone moved to van
+- [x] Outside area expanded: single 700×200 rect, yellow boundary tape on 3 edges, street/van pushed south
+- [x] Outside zones refined: grass, walkway, driveway, road drawn as visual layers; garage entrance removed
+- [x] Van enlarged to 180×80px; outside area deepened to h:220; road to 100px; van positioned for future interior use
+- [x] Van made enterable from back only: outside split into Yard/RoadLeft/RoadRight/VanInterior; van body solid on all other sides
+- [x] Van entrance moved to east/right side (full height); van drawn over yellow tape; bottom tape removed
+- [x] Van collision: 3-wall system (north/south/west solid, east open); player can enter through back doors
+- [x] Interior visual pass: room labels removed; furniture added to all main rooms (top-down blocks)
+- [x] Lighting/shading pass: NW light direction, wall edge shading, floor textures, furniture shadows, detail accents
+- [x] Color pass: natural home tones for floors, walls, furniture, outside zones
+- [x] Door system: 17 doors with open/close toggle (E key), wood visual, closed doors block movement
+- [x] Visibility system: doorway wedge FOV; player sees current room fully + triangle through each open door; closed doors block sight
+- [x] Sight range: radial gradient falloff on fog canvas; clear within 90px, soft fade to 260px, near-dark at edge
+- [x] Room lights + flashlight: E key toggles switches, F key toggles flashlight; 40° cone, 220px range; unlit rooms dark
+- [x] 360-degree mouse aiming: playerAngle updates from mousemove; flashlight and FOV follow cursor
+- [x] Fix gray-screen bug: camX/camY were undefined in update(); now computed locally with _camX/_camY
+- [x] Player sprite rotates to face mouse: body + front highlight + nose dot rotate with playerAngle
+- [x] Person sprite + walk animation: head/body/legs drawn with sin-based leg swing while moving
+- [x] Van equipment wall: pegboard screen (view-only) with 6 items; E to open, ESC to close
+- [x] Van visual pass: top-down redesign (shadow, roof cutaway, cab, monitors, wheels); pegboard south wall; tool silhouettes improved
+- [x] Outside night + roof: dark overlay, front-door warm glow, roof shows from outside, hides inside
+- [x] Roof detail pass: wall faces, 4 sections, shingles, ridges, valleys, eaves, gutters, chimney
+- [x] Environment modes (M key): night, nightrain, sunrise, sunset, bloodmoon, bloodmoonrain; rain particles; roof circle fog-clear
+- [x] Gameplay zoom (ZOOM=1.8): world + fog canvas scale; sight/glow radii adjusted; mouse angle simplified
+- [x] ENV mode visual pass: fogColor, skyGlow added; stronger tints; roof-reveal circle uses soft gradient fade
+- [x] Directional lighting: sunrise east-gradient+bloom, sunset west-gradient+bloom, blood moon overhead radial
+- [x] Env mode: random on start, M key removed, all intensities toned down
+- [x] Sunlight physically limited: world-space rects only (outside+foyer+van); fog blocks interior; skyGlow removed
+- [x] Sunlight refined: outside wash reduced (0.10 peak), foyer leak gated on front door open, van ambient bleed stays; no deep interior penetration
+- [x] Sunlight as directional openings: closed door = zero leak; open door = clipped radial spill from threshold only; van same (gated on vanDoor.open)
+- [x] Weather/light leakage fix: rain clipped to outside rect; blood moon + nightrain tints moved to world-space only (no interior bleed); sunrise/sunset outside alpha raised
+- [x] Rain on roof + road: when playerOutside clip expands to y:60–982 (roof + outside); when inside stays y:720–982 only
+- [x] Rain draw-order fix: moved rain block to after road/tape draw so streaks appear on top of asphalt; sunrise/sunset alpha raised to 0.36 peak
+- [x] Pegboard redesign: one wide virtual board (1400px), single item row, visible hanging pegs, ←/→ scroll (max 560px), scroll indicator bar
+- [x] Pegboard expanded: 11 items with qty field; 5 new silhouettes (Sound Recorder, Sanity Meds, Lighter, Incense, Crucifix); qty badge per slot; qty=0 shows empty dark slot; 16 total slots (3900px board)
+- [x] Pegboard 3-row layout: 4 items/row × 3 rows (rowEy 8/154/300), 6 cols × 3 rows = 18 slots, 1260px virtual board; short peg nubs per row; cards 160×130px
+- [x] Pegboard zoom removed; gameplay zoom added: gameZoom variable (0.8–3.0, default 1.8); +/- keys during play; zoom% shown in HUD
+- [x] Fix van/movement crash: `const mode` used before declaration (ReferenceError); moved to top of draw()
+- [x] Inventory/pickup system: click pegboard to take items (max 3 + lighter), Q cycle, HUD slots, held-item visual, flashlight requires pickup
+- [x] Ghost roster: 24 ghosts with exact canonical evidence combos; canonical 7 evidence names; The Mimic fake-orb note
+- [x] Journal tabbed upgrade: Evidence tab (checkable evidence types + narrowing) + Ghost Guide tab (entries per ghost with notes + evidence)
+- [x] Ghost roster expanded to 6 with evidence[] and notes fields
+- [x] Journal visual redesign: aged paper, leather spine, ruled lines, serif font, strikethrough ruled-out ghosts
+- [x] World item drop/place/pickup: G places selected item in front of player; E picks up nearby world items; worldItems[] array; item label + color dot drawn in world
+- [x] One real ghost per round: currentGhost chosen from 24-ghost roster; invisible to player; position tracked internally
+- [x] Round-end flow: journal ghost selection (★ click), van keypad (Open Doors / Leave Site), result screen shows guess vs actual
+- [x] Remove old prototype systems: ghostFlash, notebook, photo, exit zone, old guess screen, guessing state var
+- [x] Journal evidence 3-state cycling: neutral / confirmed / crossed out
+- [x] Journal ghost list 3-state: selected guess / crossed out / neutral (left/right click)
+- [x] Journal redesigned for single-click interaction: separate confirm/cross-out controls, no right-click needed
+- [x] Journal single-click cycles: evidence (neutral→confirmed→crossed→neutral), ghost (neutral→guess→crossed→neutral)
+- [x] Journal redesigned as open two-page book spread with center crease
+- [x] Journal Options tab: sensitivity control + keybind rebinding system
+- [x] Fixed keybind rebinding: rw missing from click handler caused silent NaN hit-test failure
+- [x] Sprint mechanic: hold Shift (rebindable) to move at 1.6× speed
+- [x] Flashlight sensitivity: lerp rate on playerAngle, adjustable in Options tab
+- [x] Journal ghost tab: always exactly one guess selected (defaults to Spirit)
+- [x] Evidence narrowing: confirmed = must match, crossed = must not match
+- [x] Tool placement system: worldItems store facing+active; R key toggles; per-item visuals
+- [x] D.O.T.S. Projector: added to equipment, dot-grid field when active
+- [x] Flashlight placed: beam cone drawn when active
+- [x] Sound Recorder placed: pulse ring animation when active
+- [x] Video Camera placed: facing arrow + red recording dot when active
+- [x] Lighter: lit/unlit state (lighterLit), bright flame glow when lit
+- [x] Fix pegboard crash: D.O.T.S. shape missing from shapes[] caused TypeError, leaked ctx.save, corrupted rendering
+- [x] Per-item top-down floor art: all 13 placed tools have detailed ctx-drawn visuals (no more colored squares)
+- [x] Player visual upgrade: arms, shoes, ears, hair, enlarged shadow; right arm stiffens when holding item
+- [x] Held-item mini art: 10 items have custom in-hand visuals at right-hand position; lighter has flame when lit
+- [x] Held-item scale + state visuals: items 1.6× larger in hand; Flashlight/UV on=glow, Lighter lit=flame halo; others have TODO placeholders for held-state wiring
+- [x] Screen-fixed enlarged held-item panel: bottom-right (698,462), 92×92px, 3.5× scale, state-aware, zoom-independent; floor+hand items rescaled to 0.5× player
+- [x] Held-item activation system: heldItemOn toggle (R), heldItemUsing hold-to-use (R held); Sound Recorder 3-state visual; D.O.T.S./Camera/Incense wired; panel box removed
+- [x] Ghost evidence system (3 types): EMF Level 5 (meter on reader), D.O.T.S. figure in field, Spirit Box response overlay; ghost has position+favorite room; only matching ghosts trigger each evidence
+- [x] Placed items scaled 0.75× so they read as smaller than the player on the floor
+- [x] Q key lighter cycling: lighter reachable as 4th slot; HUD slot highlights + shows [LIT] label when selected
+- [x] Placed tool active state preserved: items placed while on stay active in world (active: heldItemOn)
+- [x] D.O.T.S. refinement: denser smaller grid (49 dots, 1px radius, 15px row spacing, 9px col spread)
+- [x] Active placed-tool world visuals: Flashlight gradient cone + lens dot; UV Flashlight purple cone; Sound Recorder dual pulse rings + REC dot; Video Camera blue FOV fan + blinking REC dot; Incense orange warm glow
+- [x] Held lighter glow: small orange radial gradient around player when lighter held and lit (r=55)
+- [x] Lighter fog visibility: lighter held+lit punches soft radial clear in fog (r=65); only when lighter slot selected
+- [x] UV flashlight separated: own uvFlashlightOn state; range 180 (vs 300), 55% partial erasure; only reveals when held
+- [x] Debug ghost (DEBUG_GHOST flag): Ultimate Ghost always in Foyer, all evidence types, fires every 2s at 100% — disable by setting DEBUG_GHOST=false
+- [x] Ghost visible appearance: decayed player — same proportions, pale grey-green skin, sunken dark eye sockets, grey iris glow, cheek rot, forehead gash, limp arms, bare feet
+- [x] Ghost natural movement: waypoint walking (speed 1.4px/frame), 0.6–2.2s pauses, faces travel direction, leg/arm walk animation; no teleport drift
+- [x] Ghost collision: canGhostMoveTo() — blocks closed doors, walkable-rect containment, optional room confinement; wall-sliding + fallback target on full block
+- [x] Master ITEMS registry: 28 items (9 starter, 12 optional, 7 cursed); itemColors + directionalTools + equipmentList all derived from it; pegboard auto-scales; stub fallback shape prevents crashes
+- [x] D.O.T.S. fully implemented: field cone geometry check (getDotsProjectorAtGhost), ghost visible only in field during disturb state, green-tinted body with scan-lines and flickering eye glow, natural walk animation preserved
+- [x] Flashlight fog gated on held: cone only clears fog when Flashlight is selected slot
+- [x] Camera furniture placement: hold-G preview system; furniture[] array; nightstand in foyer; ghost preview (blue=valid, red=invalid); direction arrow; release G commits; angle follows mouse; no floor placement
+- [x] Tripod basics: place/pickup/carry; mountedCamera slot; attach Video Camera via E; pickup returns both; floor art (3-leg top-down, bigger than other items, camera block when mounted); held art (folded column); smart E prompt
+- [x] Spirit Box: R key starts 2.5s listen window; response checks same-room+range+lights-off+evidence+chance; 3 overlays: listening (pulsing dots), no response (grey dashes), response (cyan); hand art pulses when listening
+- [x] Thermometer: roomTemps[] per-room °C; ghost cools its room (6°C/s debug, 1°C/s normal); freezing evidence → −10°C floor, else 5°C floor; warm back to 20°C when ghost leaves; held readout with color coding (white/cold/freezing); hand art shows live temp
+- [x] UV Light (Ultraviolet): ghost leaves fingerprint marks on nearby doors; uvMarks[] persist per round; markInUVCone() checks held+placed UV cones; marks drawn in world with purple glow+ridge art only when illuminated
+- [x] Ghost Writing: placed active Ghost Book within 120px gets written by compatible ghost; written state persists; 1.8s shake+glow animation on write; EMF event spawns at book location; purple indicator dot; closed book shows cover, open blank shows ruled lines, written shows ink scrawls
+- [x] EMF Reader: location-based sources (emfSources[]); ghost interactions push {x,y,level,timer}; EMF5 ghosts 30% chance of level 5; player must be within 100px with EMF Reader held; sources last 8–14s, max 6 queued
+- [x] Visual fixes: furniture occlusion (room-gated draw), camera-on-furniture elevation (placedOn tag + 0.75× scale + Y offset), camera-on-tripod mount position (cy-8 offset)
+- [x] CCTV camera station in van: monitor on north wall, E to enter feed, ESC to exit, ←/→ cycle cameras; drawCameraView() renders world from camera POV with 60° cone fog; no-signal screen if no cameras; _drawCCTVChrome() overlay (scanlines, REC dot, cycle hint)
+- [x] Handheld camera viewfinder mode: holdingCamera replaces normal fog with _applyCameraConeFog (60° cone on main view); N key toggles NV (green tint + dark-green fog vs. grey normal); _drawViewfinderChrome corner brackets + NV/REC badges; PiP removed; _applyCameraConeFog extracted as shared helper used by both handheld and CCTV
+- [x] Unified camera feed system: renderCameraFeed(tCtx,tFogCtx,W,H,zoom,camX,camY,facing) shared core; handheld PiP overlay (top-right, 234×176, PIP_ZOOM=1.2) when Video Camera selected; night vision always-on (NV tint + dark-green fog + no room-light block); handheld recording = R key (heldItemOn); CCTV recording = R key in view mode (cctvRecording); _drawPiPChrome() + updated _drawCCTVChrome()
+- [x] Ghost roster system: GHOST_REGISTRY (27 ghosts), GHOST_CONFIG flags, GHOST_BEHAVIOR_DEFAULTS, ghostSpecialState, selectGhostForRound(), setupGhostSpecialState(), ghostLog(); normal roster live; Ultimate Ghost disabled
+- [x] Ghost Orbs: camera-only floating orbs (4 per round); drift+bounce inside ghost's room; flicker alpha; visible only in handheld camera view and CCTV feed; ORB badge notification in both viewfinder and CCTV chrome when orb in cone
+- [x] Ghost behavior from type: getGhostBehavior() wired to movement speed, event rate, roam tendency; specialRules enforced (dots_camera_only, no_room_migration); Goryo DOTS only visible through held camera viewfinder
+- [ ] Ghost hunt mode (chases player, causes lose condition)
+- [ ] Tilemap / multi-room map
+
+## Done
+- Project files created
+- index.html: canvas, game loop, player movement, room boundary
+- Title screen with Start button → transitions to game
+- Room walls drawn as solid rects; player collides with inner floor boundary
+- ESC returns to title screen; player position resets
+- Notebook spawns at 1 of 3 fixed positions on game start
+- Player can inspect notebook with E when nearby; shows found message
+- Notebook reveals a randomly chosen ghost name on inspection
+- Exit zone added; reaching it after notebook found ends the round with a result screen
+- Ghost list replaced with name+clue objects; notebook shows clue, result screen reveals name
+- Guess screen: loop fix, 1/2/3 keys and mouse click both work via shared selectGhost()
+- Fixed duplicate loop bug: loopRunning flag prevents multiple loop() instances
+- Polished all screen instructions: title, game HUD, guess screen, result screen
+- Arrow key scroll prevention; objective text moved to bottom-right HUD
+- Added photo evidence object (red); reveals clue2 per ghost; both clues shown in HUD
+- Ghost clues redesigned with overlaps so both clues are required to identify correctly
+- Journal screen (J key): shows found clues and filters possible ghosts by evidence
+- ~~Round timer (90s lose condition)~~ — replaced with safe-time system
+- Safe-time window added: 20s countdown, then "Danger" indicator; pauses during journal
+- WASD fix: expanded movementKeys to include w/a/s/d alongside arrow keys
