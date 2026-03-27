@@ -5373,26 +5373,80 @@
       }
 
       // ── TOP LEFT: House Overview ──────────────────────────────────────────
+      // Derived entirely from the live rooms[], doors[], and furniture[] arrays.
+      // When those arrays change, the minimap updates automatically — no separate layout.
       panel(p.tl.x, p.tl.y, panW, panH, "HOUSE OVERVIEW");
-      // Simplified floor-plan — world rooms scale to fit panel
       const worldX0=60, worldY0=60, worldW=680, worldH=660;
       const scaleX = (panW-20)/worldW, scaleY = (panH-28)/worldH;
       const offX = p.tl.x+10, offY = p.tl.y+18;
-      ctx.fillStyle = "#0f1e2e";
+      // World→minimap coordinate helpers
+      const toMX = wx => offX + (wx - worldX0) * scaleX;
+      const toMY = wy => offY + (wy - worldY0) * scaleY;
+      const toMW = ww => Math.max(0.8, ww * scaleX);
+      const toMH = wh => Math.max(0.8, wh * scaleY);
+
+      // Room fill — color-coded by type so rooms have visual identity on the map
+      const _roomFill = lbl =>
+        lbl.includes("Bed")     ? "#221d2c" :  // bedrooms — purple-grey
+        lbl.includes("Bath")    ? "#1a1e2a" :  // bathrooms — cool slate
+        lbl.includes("Kitchen") ? "#181e19" :  // kitchen — cool stone
+        lbl.includes("Dining")  ? "#1f1c13" :  // dining — warm oak
+        lbl.includes("Living")  ? "#1e190e" :  // living — warm brown
+        lbl.includes("Foyer")   ? "#1d1b11" :  // foyer — warm tan
+        lbl.includes("Hallway") ? "#161412" :  // hallway — dark corridor
+        lbl.includes("Garage")  ? "#131313" :  // garage — concrete
+        lbl.includes("Utility") ? "#141813" :  // utility — muted
+        lbl.includes("Study")   ? "#15181d" :  // study — dark blue
+        lbl.includes("Walk")    ? "#171513" :  // walk-in — neutral
+        lbl.includes("Closet")  ? "#15130e" :  // closet — dark
+        lbl.includes("Yard")    ? "#121a10" :  // outside — dark green
+                                   "#141418";
+
+      // 1 — Room fills
       rooms.forEach(r => {
-        const rx = offX + (r.x - worldX0)*scaleX, ry = offY + (r.y - worldY0)*scaleY;
-        ctx.fillRect(rx, ry, r.w*scaleX, r.h*scaleY);
+        ctx.fillStyle = _roomFill(r.label || "");
+        ctx.fillRect(toMX(r.x), toMY(r.y), toMW(r.w), toMH(r.h));
       });
-      ctx.strokeStyle = "#2a5070"; ctx.lineWidth = 0.5;
+
+      // 2 — Door openings: draw each door rect in a slightly lighter passage tone
+      //     so wall junctions show a hint of the opening
+      ctx.fillStyle = "#1e3040";
+      doors.forEach(d => {
+        ctx.fillRect(toMX(d.x), toMY(d.y), toMW(d.w), toMH(d.h));
+      });
+
+      // 3 — Room outlines (drawn after door fills so the wall grid is clear)
+      ctx.strokeStyle = "#28485e"; ctx.lineWidth = 0.5;
       rooms.forEach(r => {
-        const rx = offX + (r.x - worldX0)*scaleX, ry = offY + (r.y - worldY0)*scaleY;
-        ctx.strokeRect(rx, ry, r.w*scaleX, r.h*scaleY);
+        ctx.strokeRect(toMX(r.x), toMY(r.y), toMW(r.w), toMH(r.h));
       });
-      // Player blip
-      const bx = offX + (player.x+8 - worldX0)*scaleX;
-      const by = offY + (player.y+8 - worldY0)*scaleY;
+
+      // 4 — Major furniture blocks — read directly from the furniture[] array
+      //     so any future add/remove/move also updates this map automatically
+      const _furnitureFill = style =>
+        style === "bed"     ? "#352d48" :  // bed — soft purple
+        style === "counter" ? "#2d3130" :  // counter/appliance — cool stone
+        style === "seat"    ? "#3d2f1e" :  // seating — warm fabric
+                              "#483820";   // wood storage (default)
+      furniture.forEach(f => {
+        ctx.fillStyle = _furnitureFill(f.style);
+        ctx.fillRect(toMX(f.x), toMY(f.y), toMW(f.w), toMH(f.h));
+      });
+
+      // 5 — Room labels — small text centered in each room, skipped if too narrow
+      ctx.save();
+      ctx.font = "5px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgba(90,130,160,0.75)";
+      rooms.forEach(r => {
+        if (!r.label || r.label === "Yard") return;
+        if (toMW(r.w) < 22 || toMH(r.h) < 9) return; // too small to label
+        ctx.fillText(r.label, toMX(r.x + r.w / 2), toMY(r.y + r.h / 2));
+      });
+      ctx.restore();
+
+      // 6 — Player blip (on top of everything)
       ctx.fillStyle = "#40c8ff";
-      ctx.beginPath(); ctx.arc(bx, by, 2.5, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(toMX(player.x+8), toMY(player.y+8), 2.5, 0, Math.PI*2); ctx.fill();
 
       // ── TOP RIGHT: Microphone Input ───────────────────────────────────────
       panel(p.tr.x, p.tr.y, panW, panH, "AUDIO MONITOR");
