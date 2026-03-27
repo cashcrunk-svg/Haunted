@@ -457,8 +457,12 @@
       selectedSlot = 0;
       flashlightOn = false;
       worldItems      = [];
-      // One random cursed object from the full pool (all 7 equally likely)
-      const cursedPool = ITEMS.filter(it => it.category === "cursed");
+      // TESTING: Voodoo Doll always spawns. Remove the forced spawn below to return to normal.
+      const _voodooItem = ITEMS.find(it => it.name === "Voodoo Doll");
+      worldItems.push({ name: _voodooItem.name, x: _voodooItem.spawnX, y: _voodooItem.spawnY,
+                        facing: 0, active: false, written: false, writeAnimTimer: 0 });
+      // One random cursed object from the remaining pool (excludes Voodoo Doll to avoid duplicate)
+      const cursedPool = ITEMS.filter(it => it.category === "cursed" && it.name !== "Voodoo Doll");
       const cursedPick = cursedPool[Math.floor(Math.random() * cursedPool.length)];
       const isCircle   = cursedPick.name === "Summoning Circle";
       worldItems.push({ name: cursedPick.name, x: cursedPick.spawnX, y: cursedPick.spawnY,
