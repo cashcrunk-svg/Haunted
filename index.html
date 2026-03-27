@@ -445,6 +445,61 @@
       if (!loopRunning) { loopRunning = true; loop(); }
     });
 
+    // --- Shared interact action — called by keyboard E and desktop mouse click ---
+    function doInteract() {
+      if (!gameRunning) return;
+      const pcx = player.x + player.width  / 2;
+      const pcy = player.y + player.height / 2;
+      const nearIdx = worldItems.findIndex(it =>
+        Math.hypot(it.x + 6 - pcx, it.y + 6 - pcy) < 30
+      );
+      if (nearIdx >= 0) {
+        const it = worldItems[nearIdx];
+        if (it.name === "Tripod") {
+          const heldCam = inventory[selectedSlot] === "Video Camera";
+          if (heldCam && !it.mountedCamera) {
+            it.mountedCamera = "Video Camera";
+            inventory.splice(selectedSlot, 1);
+            if (selectedSlot >= inventory.length) selectedSlot = Math.max(0, inventory.length - 1);
+          } else {
+            const slots = 1 + (it.mountedCamera ? 1 : 0);
+            if (inventory.length + slots <= 3) {
+              inventory.push("Tripod");
+              if (it.mountedCamera) inventory.push(it.mountedCamera);
+              worldItems.splice(nearIdx, 1);
+            }
+          }
+        } else if (it.name === "Lighter" && !hasLighter) {
+          hasLighter = true;
+          worldItems.splice(nearIdx, 1);
+        } else if (it.name !== "Lighter" && inventory.length < 3 && !inventory.includes(it.name)) {
+          inventory.push(it.name);
+          worldItems.splice(nearIdx, 1);
+        }
+      }
+      const nearD = nearDoor();
+      if (nearD) {
+        const playerInDoor = player.x + player.width  > nearD.x && player.x < nearD.x + nearD.w &&
+                             player.y + player.height > nearD.y && player.y < nearD.y + nearD.h;
+        if (nearD.open && playerInDoor) { /* blocked */ }
+        else nearD.open = !nearD.open;
+      }
+      if (nearVanDoor())     vanDoor.open = !vanDoor.open;
+      if (nearKeypad())      { keypadOpen = true; return; }
+      if (nearPegboard())    { equipmentOpen = true; pegScrollX = 0; return; }
+      if (nearCCTV())        {
+        cameraViewMode = true;
+        const cams = getPlacedCameras();
+        cameraViewIndex = Math.min(cameraViewIndex, Math.max(0, cams.length - 1));
+        return;
+      }
+      if (nearDangerTimer()) { dangerTimerOpen = true; return; }
+      if (nearFourPanel())   { fourPanelOpen   = true; return; }
+      if (nearCorkBoard())   { corkBoardOpen   = true; return; }
+      const swIdx = nearSwitch();
+      if (swIdx >= 0) roomLights[swIdx].on = !roomLights[swIdx].on;
+    }
+
     // --- Escape returns to lobby / E to interact / J for journal ---
     document.addEventListener("keydown", e => {
       // Rebind intercept — if waiting for a new key, capture it now
@@ -570,62 +625,7 @@
         }
       }
       if (e.key.toLowerCase() === keybinds.interact) {
-        // Pick up nearby world item first
-        if (gameRunning) {
-          const pcx = player.x + player.width  / 2;
-          const pcy = player.y + player.height / 2;
-          const nearIdx = worldItems.findIndex(it =>
-            Math.hypot(it.x + 6 - pcx, it.y + 6 - pcy) < 30
-          );
-          if (nearIdx >= 0) {
-            const it = worldItems[nearIdx];
-            if (it.name === "Tripod") {
-              const heldCam = inventory[selectedSlot] === "Video Camera";
-              if (heldCam && !it.mountedCamera) {
-                // Attach held camera to tripod
-                it.mountedCamera = "Video Camera";
-                inventory.splice(selectedSlot, 1);
-                if (selectedSlot >= inventory.length) selectedSlot = Math.max(0, inventory.length - 1);
-              } else {
-                // Pick up tripod (and camera if mounted) — need enough inventory space
-                const slots = 1 + (it.mountedCamera ? 1 : 0);
-                if (inventory.length + slots <= 3) {
-                  inventory.push("Tripod");
-                  if (it.mountedCamera) inventory.push(it.mountedCamera);
-                  worldItems.splice(nearIdx, 1);
-                }
-              }
-            } else if (it.name === "Lighter" && !hasLighter) {
-              hasLighter = true;
-              worldItems.splice(nearIdx, 1);
-            } else if (it.name !== "Lighter" && inventory.length < 3 && !inventory.includes(it.name)) {
-              inventory.push(it.name);
-              worldItems.splice(nearIdx, 1);
-            }
-          }
-        }
-        const nearD = gameRunning && nearDoor();
-        if (nearD) {
-          // Only close if player is not standing inside the door rect
-          const playerInDoor = player.x + player.width > nearD.x && player.x < nearD.x + nearD.w &&
-                               player.y + player.height > nearD.y && player.y < nearD.y + nearD.h;
-          if (nearD.open && playerInDoor) { /* blocked — step aside first */ }
-          else nearD.open = !nearD.open;
-        }
-        if (gameRunning && nearVanDoor()) vanDoor.open = !vanDoor.open;
-        if (gameRunning && nearKeypad())  { keypadOpen = true; return; }
-        if (gameRunning && nearPegboard()) { equipmentOpen = true; pegScrollX = 0; return; }
-        if (gameRunning && nearCCTV()) {
-          cameraViewMode = true;
-          const cams = getPlacedCameras();
-          cameraViewIndex = Math.min(cameraViewIndex, Math.max(0, cams.length - 1));
-          return;
-        }
-        if (gameRunning && nearDangerTimer()) { dangerTimerOpen = true; return; }
-        if (gameRunning && nearFourPanel())   { fourPanelOpen = true; return; }
-        if (gameRunning && nearCorkBoard())   { corkBoardOpen = true; return; }
-        const swIdx = gameRunning ? nearSwitch() : -1;
-        if (swIdx >= 0) roomLights[swIdx].on = !roomLights[swIdx].on;
+        doInteract();
       }
       // (Guess screen is click-only now — 6 ghosts don't fit on number keys)
     });
@@ -1441,6 +1441,27 @@
       const mobPegSwipe = { active: false, id: null, startX: 0, startScrollX: 0, moved: false };
       function _resetPegSwipe() { mobPegSwipe.active = false; mobPegSwipe.id = null; mobPegSwipe.moved = false; }
 
+      // ── Journal slider drag state ────────────────────────────────────────────
+      // Geometry constants must exactly match the drawJournal mobile tab-2 layout.
+      //   jy=52, lx=44, lw=358  →  trackX=58, trackW=308
+      //   Row track-center Y values (absolute):  136, 196, 256
+      const JOURNAL_SLIDER = {
+        trackX: 58, trackW: 308, thumbR: 13,
+        rows: [
+          { cy:136, min:0.6, max:1.6,
+            get: ()=> mobJoyScale,
+            set: v => { mobJoyScale = +Math.max(0.6,Math.min(1.6,v)).toFixed(2); saveMobileSettings(); } },
+          { cy:196, min:0.6, max:1.6,
+            get: ()=> mobBtnScale,
+            set: v => { mobBtnScale = +Math.max(0.6,Math.min(1.6,v)).toFixed(2); saveMobileSettings(); } },
+          { cy:256, min:0.3, max:1.0,
+            get: ()=> mobOpacity,
+            set: v => { mobOpacity  = +Math.max(0.3,Math.min(1.0,v)).toFixed(2); saveMobileSettings(); } },
+        ],
+      };
+      let mobSliderDrag = null; // { id, row } while a slider is being dragged
+      function _resetSliderDrag() { mobSliderDrag = null; }
+
       // ── Overlay panel bounds used for tap-outside-to-close ──
       // These match the constants in each drawX() function exactly.
       const MOB_PANELS = {
@@ -1543,6 +1564,24 @@
               }
             }
 
+            // Journal mobile sliders (tab 2): intercept track touches before synthetic click
+            if (journalOpen && journalTab === 2) {
+              const { trackX, trackW, thumbR, rows } = JOURNAL_SLIDER;
+              let hitSlider = false;
+              for (const row of rows) {
+                if (y >= row.cy - thumbR - 6 && y <= row.cy + thumbR + 6 &&
+                    x >= trackX - thumbR      && x <= trackX + trackW + thumbR) {
+                  // Start drag and apply value immediately at tap position
+                  mobSliderDrag = { id: t.identifier, row };
+                  const frac = Math.max(0, Math.min(1, (x - trackX) / trackW));
+                  row.set(row.min + frac * (row.max - row.min));
+                  hitSlider = true;
+                  break;
+                }
+              }
+              if (hitSlider) continue; // slider consumed touch — skip synthetic click
+            }
+
             // Tap inside any other panel → route as synthetic click for existing handlers
             canvas.dispatchEvent(new MouseEvent('click', {
               bubbles: true, cancelable: true,
@@ -1607,6 +1646,15 @@
 
         for (const t of e.changedTouches) {
           const { x, y } = _tc(t);
+
+          // ── Journal slider drag ──
+          if (mobSliderDrag && t.identifier === mobSliderDrag.id) {
+            const { trackX, trackW } = JOURNAL_SLIDER;
+            const { row } = mobSliderDrag;
+            const frac = Math.max(0, Math.min(1, (x - trackX) / trackW));
+            row.set(row.min + frac * (row.max - row.min));
+            continue; // consumed
+          }
 
           // ── Pegboard swipe (only active when equipmentOpen) ──
           if (t.identifier === mobPegSwipe.id && mobPegSwipe.active) {
@@ -1694,6 +1742,10 @@
             _resetLook();
           }
 
+          if (mobSliderDrag && t.identifier === mobSliderDrag.id) {
+            _resetSliderDrag();
+          }
+
           if (t.identifier === mobPegSwipe.id) {
             if (!mobPegSwipe.moved && equipmentOpen) {
               // Was a tap, not a scroll — fire synthetic click so item selection still works
@@ -1710,7 +1762,7 @@
       }
       canvas.addEventListener("touchend",    _touchEnd, { passive: false });
       canvas.addEventListener("touchcancel", e => {
-        _resetJoy(); _resetLook(); _resetPinch();
+        _resetJoy(); _resetLook(); _resetPinch(); _resetSliderDrag(); _resetPegSwipe();
         mobileSprinting = false; mobileSprintId = null;
       }, { passive: false });
 
@@ -4034,12 +4086,51 @@
 
     }
 
+    // --- Desktop mouse wheel: pegboard scroll or inventory cycle ---
+    if (!isMobile) {
+      canvas.addEventListener("wheel", e => {
+        e.preventDefault();
+        const dir = e.deltaY > 0 ? 1 : -1; // +1 = scroll down, -1 = scroll up
+
+        if (equipmentOpen) {
+          // Scroll the pegboard horizontally
+          const virtualW = Math.ceil(equipmentList.length / 3) * 200 + 60;
+          const maxScroll = Math.max(0, virtualW - 664);
+          pegScrollX = Math.max(0, Math.min(maxScroll, pegScrollX + dir * 80));
+          return;
+        }
+
+        if (gameRunning && !journalOpen && !keypadOpen &&
+            !dangerTimerOpen && !fourPanelOpen && !corkBoardOpen && !cameraViewMode) {
+          const total = inventory.length + (hasLighter ? 1 : 0);
+          if (total > 0) {
+            selectedSlot = ((selectedSlot + dir) % total + total) % total;
+            heldItemOn = false; heldItemUsing = false;
+          }
+        }
+      }, { passive: false });
+    }
+
     // --- Mouse click handler ---
     canvas.addEventListener("click", e => {
       const rect = canvas.getBoundingClientRect();
       // Divide by CSS scale so click coordinates stay in the 800×600 logical space
       const mx = (e.clientX - rect.left) * (canvas.width  / rect.width);
       const my = (e.clientY - rect.top)  * (canvas.height / rect.height);
+
+      // ── Desktop: CCTV view — click anywhere closes it ──────────────────────
+      if (!isMobile && cameraViewMode) { cameraViewMode = false; return; }
+
+      // ── Desktop: click outside open panel closes it ──────────────────────
+      // Panels that don't already have dedicated outside-click handling
+      if (!isMobile) {
+        if (equipmentOpen  && (mx < 60  || mx > 740 || my < 35  || my > 565)) { equipmentOpen  = false; return; }
+        if (keypadOpen     && (mx < 270 || mx > 530 || my < 250 || my > 390)) { keypadOpen     = false; return; }
+        if (dangerTimerOpen&& (mx < 270 || mx > 530 || my < 220 || my > 390)) { dangerTimerOpen= false; return; }
+        if (fourPanelOpen  && (mx < 50  || mx > 750 || my < 30  || my > 570)) { fourPanelOpen  = false; return; }
+        if (corkBoardOpen  && (mx < 120 || mx > 680 || my < 80  || my > 520)) { corkBoardOpen  = false; return; }
+        if (journalOpen    && (mx < 20  || mx > 756 || my < 28  || my > 548)) { journalOpen    = false; return; }
+      }
 
       // Pegboard pickup
       if (equipmentOpen) {
@@ -4097,28 +4188,10 @@
         // Options tab (tab 2) — left page differs by platform; right page keybinds shared
         if (journalTab === 2) {
           if (isMobile) {
-            // ── Mobile: Joystick Size, Button Size, Opacity [-/+] buttons ──
-            // Geometry must EXACTLY match drawJournal _mobSetting constants:
-            //   [−] at (lx+14, labelY+4) size 48×30
-            //   [+] at (lx+120, labelY+4) size 48×30
-            const MOB_BTN_W = 48, MOB_BTN_H = 30, MOB_BTN_DY = 4;
-            const MOB_DEC_X = lx + 14;
-            const MOB_INC_X = lx + 120;
-            const rows = [
-              { labelY: jy + 72,  get: () => mobJoyScale, set: v => { mobJoyScale = +Math.max(0.6, Math.min(1.6, v)).toFixed(1); } },
-              { labelY: jy + 142, get: () => mobBtnScale, set: v => { mobBtnScale = +Math.max(0.6, Math.min(1.6, v)).toFixed(1); } },
-              { labelY: jy + 212, get: () => mobOpacity,  set: v => { mobOpacity  = +Math.max(0.3, Math.min(1.0, v)).toFixed(1); } },
-            ];
-            const step = [0.1, 0.1, 0.1];
-            rows.forEach((row, i) => {
-              const bty = row.labelY + MOB_BTN_DY;
-              if (my >= bty && my <= bty + MOB_BTN_H) {
-                if (mx >= MOB_DEC_X && mx <= MOB_DEC_X + MOB_BTN_W) { row.set(row.get() - step[i]); saveMobileSettings(); }
-                if (mx >= MOB_INC_X && mx <= MOB_INC_X + MOB_BTN_W) { row.set(row.get() + step[i]); saveMobileSettings(); }
-              }
-            });
-            // Reset mobile defaults button (y: jy+268, w:140)
-            if (mx >= lx + 14 && mx <= lx + 154 && my >= jy + 268 && my <= jy + 290) {
+            // ── Mobile: sliders are handled via touch drag (touchmove), not click.
+            // Only the Reset button uses a synthetic click.
+            // Reset button bounds match drawJournal: y = jy+238, w=140, h=26
+            if (mx >= lx + 14 && mx <= lx + 154 && my >= jy + 238 && my <= jy + 264) {
               mobJoyScale = 1.0; mobBtnScale = 1.0; mobOpacity = 0.6;
               saveMobileSettings();
             }
@@ -4204,6 +4277,13 @@
       if (corkBoardOpen) {
         if (mx >= 664 && mx <= 682 && my >= 80 && my <= 98) corkBoardOpen = false;
         return;
+      }
+
+      // ── Desktop click-to-interact in the game world ──────────────────────
+      // Fires only when no UI overlay is open and it's a real desktop click.
+      // Reuses doInteract() — same proximity checks as pressing E.
+      if (!isMobile && gameRunning && !journalOpen && !cameraViewMode) {
+        doInteract();
       }
     });
 
@@ -4807,63 +4887,62 @@
       // =====================================================
       if (journalTab === 2) {
 
-        // ── Left page: MOBILE shows control size/opacity sliders ──────────
+        // ── Left page: MOBILE shows draggable control sliders ────────────
         if (isMobile) {
-          // Helper: draw a [-] value [+] row and bar for a mobile setting
-          // Returns the y bottom edge so rows can stack cleanly
-          // Button geometry — constants shared with click handler below
-          // [−] at (lx+14, labelY+4), 48×30   [+] at (lx+120, labelY+4), 48×30
-          const MOB_BTN_W = 48, MOB_BTN_H = 30;
-          const MOB_DEC_X = lx + 14;   // decrease button left edge
-          const MOB_INC_X = lx + 120;  // increase button left edge
-          const MOB_BTN_DY = 4;        // top offset from labelY
-
-          function _mobSetting(label, value, minV, maxV, barY, labelY) {
-            ctx.fillStyle = "#3a2810"; ctx.font = "italic bold 10px Georgia, serif"; ctx.textAlign = "left";
-            ctx.fillText(label, lx + 14, labelY);
-            const bty = labelY + MOB_BTN_DY; // button top y
-            // [−] button
-            ctx.fillStyle = "#c8b890"; ctx.fillRect(MOB_DEC_X, bty, MOB_BTN_W, MOB_BTN_H);
-            ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1.5; ctx.strokeRect(MOB_DEC_X, bty, MOB_BTN_W, MOB_BTN_H);
-            ctx.fillStyle = "#2a1a08"; ctx.font = "bold 16px Georgia, serif"; ctx.textAlign = "center";
-            ctx.fillText("−", MOB_DEC_X + MOB_BTN_W / 2, bty + MOB_BTN_H * 0.68);
-            // value text (between buttons)
-            ctx.fillStyle = "#2a1a08"; ctx.font = "bold 13px Georgia, serif";
-            ctx.fillText(value.toFixed(1), lx + 14 + MOB_BTN_W + 24, bty + MOB_BTN_H * 0.68);
-            // [+] button
-            ctx.fillStyle = "#c8b890"; ctx.fillRect(MOB_INC_X, bty, MOB_BTN_W, MOB_BTN_H);
-            ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1.5; ctx.strokeRect(MOB_INC_X, bty, MOB_BTN_W, MOB_BTN_H);
-            ctx.fillStyle = "#2a1a08"; ctx.font = "bold 16px Georgia, serif";
-            ctx.fillText("+", MOB_INC_X + MOB_BTN_W / 2, bty + MOB_BTN_H * 0.68);
-            // bar
-            const bw = lw - 50, bh = 7;
-            ctx.fillStyle = "#d0c4a8"; ctx.fillRect(lx + 14, barY, bw, bh);
-            ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(lx + 14, barY, bw, bh);
+          // Slider draw helper — geometry must match JOURNAL_SLIDER constants exactly.
+          // trackX=58 (lx+14), trackW=308 (lw-50), thumbR=13
+          // Row track-center Y: 136, 196, 256  (jy+84, jy+144, jy+204)
+          function _mobSlider(label, value, minV, maxV, labelY, trackCY) {
+            const tX = lx + 14, tW = lw - 50, tR = 13;
             const frac = (value - minV) / (maxV - minV);
-            ctx.fillStyle = "#8a6a30"; ctx.fillRect(lx + 14, barY, frac * bw, bh);
+            const thumbX = tX + frac * tW;
+            // Label (left) and live value (right)
+            ctx.textAlign = "left";
+            ctx.fillStyle = "#3a2810"; ctx.font = "italic bold 11px Georgia, serif";
+            ctx.fillText(label, tX, labelY);
+            ctx.textAlign = "right";
+            ctx.fillStyle = "#6a4020"; ctx.font = "bold 11px monospace";
+            ctx.fillText(value.toFixed(1), tX + tW, labelY);
+            // Track background
+            ctx.fillStyle = "#d0c4a8";
+            ctx.beginPath(); ctx.roundRect(tX, trackCY - 5, tW, 10, 5); ctx.fill();
+            ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.roundRect(tX, trackCY - 5, tW, 10, 5); ctx.stroke();
+            // Track fill (filled portion left of thumb)
+            ctx.fillStyle = "#8a6a30";
+            ctx.beginPath(); ctx.roundRect(tX, trackCY - 5, frac * tW, 10, 5); ctx.fill();
+            // Thumb circle
+            ctx.fillStyle = "#c8a850";
+            ctx.beginPath(); ctx.arc(thumbX, trackCY, tR, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = "#7a5020"; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(thumbX, trackCY, tR, 0, Math.PI * 2); ctx.stroke();
+            // Centre dot
+            ctx.fillStyle = "#7a5020";
+            ctx.beginPath(); ctx.arc(thumbX, trackCY, 3, 0, Math.PI * 2); ctx.fill();
             ctx.textAlign = "left";
           }
 
           ctx.fillStyle = "#5a3a18"; ctx.font = "italic 9px Georgia, serif"; ctx.textAlign = "left";
-          ctx.fillText("Tap [−] / [+] to resize controls", lx + 14, jy + 48);
+          ctx.fillText("Drag sliders to resize controls", lx + 14, jy + 52);
 
-          _mobSetting("Joystick Size",  mobJoyScale, 0.6, 1.6, jy + 82,  jy + 72);
-          _mobSetting("Button Size",    mobBtnScale, 0.6, 1.6, jy + 152, jy + 142);
-          _mobSetting("Opacity",        mobOpacity,  0.3, 1.0, jy + 222, jy + 212);
+          // Row positions: labelY = jy+68/jy+128/jy+188  trackCY = jy+84/jy+144/jy+204
+          _mobSlider("Joystick Size", mobJoyScale, 0.6, 1.6, jy + 68,  jy + 84);
+          _mobSlider("Button Size",   mobBtnScale, 0.6, 1.6, jy + 128, jy + 144);
+          _mobSlider("Opacity",       mobOpacity,  0.3, 1.0, jy + 188, jy + 204);
 
-          // Reset mobile defaults button
-          const resetMobX = lx + 14, resetMobY = jy + 268;
-          ctx.fillStyle = "#c8b890"; ctx.fillRect(resetMobX, resetMobY, 140, 22);
-          ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(resetMobX, resetMobY, 140, 22);
+          // Reset mobile defaults button  (y = jy+238)
+          const resetMobX = lx + 14, resetMobY = jy + 238;
+          ctx.fillStyle = "#c8b890"; ctx.fillRect(resetMobX, resetMobY, 140, 26);
+          ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(resetMobX, resetMobY, 140, 26);
           ctx.fillStyle = "#3a1808"; ctx.font = "bold 9px Georgia, serif"; ctx.textAlign = "center";
-          ctx.fillText("Reset Mobile Defaults", resetMobX + 70, resetMobY + 14);
+          ctx.fillText("Reset Defaults", resetMobX + 70, resetMobY + 17);
           ctx.textAlign = "left";
 
           ctx.fillStyle = "#5a4020"; ctx.font = "italic 9px Georgia, serif";
-          ctx.fillText("Left side = joystick", lx + 14, jy + 320);
-          ctx.fillText("Right side = buttons (E R ⚡ J Q F G)", lx + 14, jy + 334);
-          ctx.fillText("Drag anywhere else to rotate facing.", lx + 14, jy + 352);
-          ctx.fillText("Two-finger pinch = zoom in/out.", lx + 14, jy + 366);
+          ctx.fillText("Left side = joystick", lx + 14, jy + 290);
+          ctx.fillText("Right side = buttons (E R ⚡ J Q F G)", lx + 14, jy + 304);
+          ctx.fillText("Drag anywhere else to rotate facing.", lx + 14, jy + 318);
+          ctx.fillText("Two-finger pinch = zoom in/out.", lx + 14, jy + 332);
 
         } else {
           // ── Left page: DESKTOP shows flashlight sensitivity ───────────────
