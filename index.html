@@ -626,7 +626,12 @@
             // All other items: instant floor placement (existing behavior)
             const px = player.x + player.width  / 2 + Math.cos(playerAngle) * 22 - 6;
             const py = player.y + player.height / 2 + Math.sin(playerAngle) * 22 - 6;
-            const newItem = { name, x: px, y: py, facing: playerAngle, active: heldItemOn };
+            // Capture the item's true on-state at the moment of placement.
+            // Flashlight/UV use their own state vars; everything else uses heldItemOn.
+            const placedActive = name === "Flashlight"    ? flashlightOn
+                               : name === "UV Flashlight" ? uvFlashlightOn
+                               : heldItemOn;
+            const newItem = { name, x: px, y: py, facing: playerAngle, active: placedActive };
             if (name === "Ghost Book") { newItem.written = false; newItem.writeAnimTimer = 0; }
             if (name === "Tripod")     { newItem.mountedCamera = null; }
             worldItems.push(newItem);
@@ -639,33 +644,26 @@
         }
       }
 
-      // R — use / toggle: nearest placed tool, or active held item
+      // R — use / toggle: held items only; placed items cannot be toggled remotely
       if (e.key.toLowerCase() === keybinds.use) {
         if (gameRunning && !journalOpen) {
-          const pcx = player.x + player.width  / 2;
-          const pcy = player.y + player.height / 2;
-          const nearIdx = worldItems.findIndex(it => Math.hypot(it.x + 6 - pcx, it.y + 6 - pcy) < 40);
-          if (nearIdx >= 0) {
-            worldItems[nearIdx].active = !worldItems[nearIdx].active;
-          } else {
-            const held = inventory[selectedSlot];
-            if (held === "Flashlight") {
-              flashlightOn = !flashlightOn;
-            } else if (held === "UV Flashlight") {
-              uvFlashlightOn = !uvFlashlightOn;
-            } else if (held === "Spirit Box") {
-              // R key = start a new listen attempt; clear any previous result state
-              heldItemOn = true;
-              spiritBoxListenTimer = 2.5;
-              spiritBoxNoResponse  = false;
-              spiritBoxTimer       = 0; // clear old response so new attempt is fresh
-            } else if (held) {
-              // All other held items (implemented or stub): toggle heldItemOn
-              heldItemOn = !heldItemOn;
-              if (!heldItemOn) heldItemUsing = false;
-            } else if (hasLighter && !held) {
-              lighterLit = !lighterLit; // lighter only when no inventory item selected
-            }
+          const held = inventory[selectedSlot];
+          if (held === "Flashlight") {
+            flashlightOn = !flashlightOn;
+          } else if (held === "UV Flashlight") {
+            uvFlashlightOn = !uvFlashlightOn;
+          } else if (held === "Spirit Box") {
+            // R key = start a new listen attempt; clear any previous result state
+            heldItemOn = true;
+            spiritBoxListenTimer = 2.5;
+            spiritBoxNoResponse  = false;
+            spiritBoxTimer       = 0; // clear old response so new attempt is fresh
+          } else if (held) {
+            // All other held items (implemented or stub): toggle heldItemOn
+            heldItemOn = !heldItemOn;
+            if (!heldItemOn) heldItemUsing = false;
+          } else if (hasLighter && !held) {
+            lighterLit = !lighterLit; // lighter only when no inventory item selected
           }
         }
       }
@@ -923,6 +921,9 @@
       x:  r.x + r.w - 7,  // flush against east wall (switch plate is 4px wide)
       y:  r.y + 18,        // slightly below the north wall, where a real switch sits
     }));
+    // Foyer switch override: east wall default (x:493) conflicts with the Coat Closet
+    // doorway opening (x:481, y:621). Move it to the west wall — no doors on that side.
+    roomLights[1].x = rooms[1].x + 7;  // 7px from west wall (x:300 → x:307)
 
     function nearSwitch() {
       const cx = player.x + 8, cy = player.y + 8;
@@ -2294,14 +2295,18 @@
         }
       });
 
-      // Light switch indicators — small colored square near top-right of each room
+      // Light switch indicators — slim flush-mount plate, wall-tone, with tiny toggle nub
       roomLights.forEach(light => {
-        // Wall plate background
-        ctx.fillStyle = "#2a2420";
-        ctx.fillRect(light.x - 1, light.y - 1, 8, 13);
-        // Indicator light (green=on, dim red=off)
-        ctx.fillStyle = light.on ? "#b8e030" : "#5a2020";
-        ctx.fillRect(light.x + 1, light.y + 3, 4, 4);
+        // Mounting plate: narrow, low-contrast against wall, slightly inset shadow
+        ctx.fillStyle = "#252018";          // dark warm-grey, close to wall tone
+        ctx.fillRect(light.x, light.y, 5, 9);
+        // Subtle raised-edge highlight (top-left edge only — reads as slight depth)
+        ctx.fillStyle = "#3a3228";
+        ctx.fillRect(light.x, light.y, 5, 1); // top edge
+        ctx.fillRect(light.x, light.y, 1, 9); // left edge
+        // Toggle nub — 2×3px, centered on plate
+        ctx.fillStyle = light.on ? "#8ab820" : "#3a1a1a"; // muted green / dark red
+        ctx.fillRect(light.x + 1, light.y + 3, 2, 3);
       });
 
 
@@ -4410,16 +4415,7 @@
         return;
       }
 
-      // ── Desktop click-to-interact in the game world ──────────────────────
-      // Converts click to world space then uses pointer-targeted doInteractAt,
-      // which selects by actual pointer hit — not by nearest/facing target.
-      if (!isMobile && gameRunning && !journalOpen && !cameraViewMode) {
-        const camCX = player.x + player.width  / 2;
-        const camCY = player.y + player.height / 2;
-        const wix   = (mx - canvas.width  / 2) / gameZoom + camCX;
-        const wiy   = (my - canvas.height / 2) / gameZoom + camCY;
-        doInteractAt(wix, wiy);
-      }
+      // Desktop world interaction is keyboard-only (E key). No click-to-interact.
     });
 
     // --- Equipment Screen (van pegboard, view-only) ---
