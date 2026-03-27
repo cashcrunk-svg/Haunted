@@ -1676,6 +1676,15 @@
             _resetLook();
           }
 
+          if (t.identifier === mobPegSwipe.id) {
+            if (!mobPegSwipe.moved && equipmentOpen) {
+              // Was a tap, not a scroll — fire synthetic click so item selection still works
+              const { clientX, clientY } = t;
+              canvas.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX, clientY }));
+            }
+            _resetPegSwipe();
+          }
+
           if (t.identifier === mobileSprintId)  { mobileSprinting = false; mobileSprintId = null; }
           if (t.identifier === mobilePinch.id0 ||
               t.identifier === mobilePinch.id1)   _resetPinch();
@@ -5817,18 +5826,47 @@
       // During full-screen popups the existing click handlers manage touch; skip overlay.
       if (journalOpen || equipmentOpen || keypadOpen || dangerTimerOpen || fourPanelOpen || corkBoardOpen) return;
 
-      // Camera view mode: show minimal exit hint instead of full HUD
+      // Camera view mode: draw CCTV button bar instead of full HUD
       if (cameraViewMode) {
         ctx.save();
-        ctx.globalAlpha = 0.6;
-        ctx.fillStyle = "#000";
-        ctx.fillRect(0, 0, canvas.width, 28);
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = "#e8c97a";
-        ctx.font = "11px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText("← Prev   TAP RIGHT to exit   Next →", canvas.width / 2, 18);
-        ctx.textAlign = "left";
+
+        // Helper: draw a rect button with label
+        function _drawCctvBtn(r, label, active) {
+          ctx.globalAlpha = active ? 0.92 : 0.62;
+          ctx.fillStyle   = active ? "#4af" : "rgba(0,0,0,0.7)";
+          ctx.strokeStyle = active ? "#7df" : "#888";
+          ctx.lineWidth   = 1.5;
+          ctx.beginPath();
+          ctx.roundRect(r.x, r.y, r.w, r.h, 5);
+          ctx.fill();
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+          ctx.fillStyle   = active ? "#fff" : "#e8c97a";
+          ctx.font        = "bold 11px monospace";
+          ctx.textAlign   = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2);
+        }
+
+        const _cams = getPlacedCameras();
+        const hasMulti = _cams.length > 1;
+
+        // Top-right exit button
+        _drawCctvBtn(MOB_CCTV.exit, "✕ EXIT", false);
+
+        // Bottom row: prev / next cam + NV toggle
+        _drawCctvBtn(MOB_CCTV.prevCam, "◀ PREV", false);
+        _drawCctvBtn(MOB_CCTV.nextCam, "NEXT ▶", false);
+        _drawCctvBtn(MOB_CCTV.nv, cameraNightVision ? "NV: ON" : "NV: OFF", cameraNightVision);
+
+        // Dim prev/next if only one camera
+        if (!hasMulti) {
+          ctx.globalAlpha = 0.3;
+          ctx.fillStyle = "#000";
+          ctx.fillRect(MOB_CCTV.prevCam.x, MOB_CCTV.prevCam.y, MOB_CCTV.prevCam.w, MOB_CCTV.prevCam.h);
+          ctx.fillRect(MOB_CCTV.nextCam.x, MOB_CCTV.nextCam.y, MOB_CCTV.nextCam.w, MOB_CCTV.nextCam.h);
+        }
+
         ctx.restore();
         return;
       }
