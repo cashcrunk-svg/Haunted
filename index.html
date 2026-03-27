@@ -4065,9 +4065,12 @@
         if (journalTab === 2) {
           if (isMobile) {
             // ── Mobile: Joystick Size, Button Size, Opacity [-/+] buttons ──
-            // Row positions match drawJournal _mobSetting calls exactly
-            // (labelY, my2 = labelY+6, buttons at mx2=lx+60 and mx2+66)
-            const mx2 = lx + 60;
+            // Geometry must EXACTLY match drawJournal _mobSetting constants:
+            //   [−] at (lx+14, labelY+4) size 48×30
+            //   [+] at (lx+120, labelY+4) size 48×30
+            const MOB_BTN_W = 48, MOB_BTN_H = 30, MOB_BTN_DY = 4;
+            const MOB_DEC_X = lx + 14;
+            const MOB_INC_X = lx + 120;
             const rows = [
               { labelY: jy + 72,  get: () => mobJoyScale, set: v => { mobJoyScale = +Math.max(0.6, Math.min(1.6, v)).toFixed(1); } },
               { labelY: jy + 142, get: () => mobBtnScale, set: v => { mobBtnScale = +Math.max(0.6, Math.min(1.6, v)).toFixed(1); } },
@@ -4075,10 +4078,10 @@
             ];
             const step = [0.1, 0.1, 0.1];
             rows.forEach((row, i) => {
-              const my2 = row.labelY + 6;
-              if (my >= my2 && my <= my2 + 20) {
-                if (mx >= mx2      && mx <= mx2 + 20) { row.set(row.get() - step[i]); saveMobileSettings(); }
-                if (mx >= mx2 + 66 && mx <= mx2 + 86) { row.set(row.get() + step[i]); saveMobileSettings(); }
+              const bty = row.labelY + MOB_BTN_DY;
+              if (my >= bty && my <= bty + MOB_BTN_H) {
+                if (mx >= MOB_DEC_X && mx <= MOB_DEC_X + MOB_BTN_W) { row.set(row.get() - step[i]); saveMobileSettings(); }
+                if (mx >= MOB_INC_X && mx <= MOB_INC_X + MOB_BTN_W) { row.set(row.get() + step[i]); saveMobileSettings(); }
               }
             });
             // Reset mobile defaults button (y: jy+268, w:140)
@@ -4775,23 +4778,30 @@
         if (isMobile) {
           // Helper: draw a [-] value [+] row and bar for a mobile setting
           // Returns the y bottom edge so rows can stack cleanly
+          // Button geometry — constants shared with click handler below
+          // [−] at (lx+14, labelY+4), 48×30   [+] at (lx+120, labelY+4), 48×30
+          const MOB_BTN_W = 48, MOB_BTN_H = 30;
+          const MOB_DEC_X = lx + 14;   // decrease button left edge
+          const MOB_INC_X = lx + 120;  // increase button left edge
+          const MOB_BTN_DY = 4;        // top offset from labelY
+
           function _mobSetting(label, value, minV, maxV, barY, labelY) {
             ctx.fillStyle = "#3a2810"; ctx.font = "italic bold 10px Georgia, serif"; ctx.textAlign = "left";
             ctx.fillText(label, lx + 14, labelY);
-            const mx2 = lx + 60, my2 = labelY + 6;
+            const bty = labelY + MOB_BTN_DY; // button top y
             // [−] button
-            ctx.fillStyle = "#c8b890"; ctx.fillRect(mx2, my2, 20, 20);
-            ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(mx2, my2, 20, 20);
-            ctx.fillStyle = "#2a1a08"; ctx.font = "bold 13px Georgia, serif"; ctx.textAlign = "center";
-            ctx.fillText("−", mx2 + 10, my2 + 14);
-            // value text
-            ctx.fillStyle = "#2a1a08"; ctx.font = "bold 11px Georgia, serif";
-            ctx.fillText(value.toFixed(1), mx2 + 38, my2 + 13);
-            // [+] button
-            ctx.fillStyle = "#c8b890"; ctx.fillRect(mx2 + 66, my2, 20, 20);
-            ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(mx2 + 66, my2, 20, 20);
+            ctx.fillStyle = "#c8b890"; ctx.fillRect(MOB_DEC_X, bty, MOB_BTN_W, MOB_BTN_H);
+            ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1.5; ctx.strokeRect(MOB_DEC_X, bty, MOB_BTN_W, MOB_BTN_H);
+            ctx.fillStyle = "#2a1a08"; ctx.font = "bold 16px Georgia, serif"; ctx.textAlign = "center";
+            ctx.fillText("−", MOB_DEC_X + MOB_BTN_W / 2, bty + MOB_BTN_H * 0.68);
+            // value text (between buttons)
             ctx.fillStyle = "#2a1a08"; ctx.font = "bold 13px Georgia, serif";
-            ctx.fillText("+", mx2 + 76, my2 + 14);
+            ctx.fillText(value.toFixed(1), lx + 14 + MOB_BTN_W + 24, bty + MOB_BTN_H * 0.68);
+            // [+] button
+            ctx.fillStyle = "#c8b890"; ctx.fillRect(MOB_INC_X, bty, MOB_BTN_W, MOB_BTN_H);
+            ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1.5; ctx.strokeRect(MOB_INC_X, bty, MOB_BTN_W, MOB_BTN_H);
+            ctx.fillStyle = "#2a1a08"; ctx.font = "bold 16px Georgia, serif";
+            ctx.fillText("+", MOB_INC_X + MOB_BTN_W / 2, bty + MOB_BTN_H * 0.68);
             // bar
             const bw = lw - 50, bh = 7;
             ctx.fillStyle = "#d0c4a8"; ctx.fillRect(lx + 14, barY, bw, bh);
