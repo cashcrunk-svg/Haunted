@@ -268,6 +268,7 @@
     let emfLevel = 0; // derived each frame from emfSources; 0–5
     let emfSources = []; // [{x, y, level, timer}] — located interaction events
     let dotsDisturbTimer = 0;          // seconds remaining for D.O.T.S. ghost figure
+    let summoningCircleTimer = 0;      // seconds remaining for summoning circle ghost manifestation
     let spiritBoxTimer = 0;            // seconds remaining for Spirit Box response flash
     let spiritBoxListenTimer = 0;     // seconds remaining in active listening window (R-triggered)
     let spiritBoxNoResponse = false;  // true briefly after a listen with no response
@@ -349,17 +350,17 @@
       // Col 7
       { name:"Head Gear",            category:"optional", color:"#405a30", pegQty:0, directional:false, desc:"Night vision headset — see in total darkness" },
       { name:"Sound Recorder",       category:"starter",  color:"#505050", pegQty:2, directional:true,  desc:"Records EVP — ghost voices on playback" },
-      { name:"Journal",              category:"starter",  color:"#b89060", pegQty:1, directional:false, desc:"Evidence notebook — pick up from van, can be set down open or closed" },
       // ── Remaining optional (stub slots, not in primary order) ──────────────
       { name:"Parabolic Microphone", category:"optional", color:"#707070", pegQty:0, directional:true,  desc:"Amplifies distant sounds through walls" },
-      // ── Cursed possessions ─────────────────────────────────────────────────
-      { name:"Music Box",            category:"cursed",   color:"#8a6080", pegQty:0, directional:false, desc:"Plays a melody — attracts the ghost" },
-      { name:"Ouija Board",          category:"cursed",   color:"#7a5820", pegQty:0, directional:false, desc:"Ask the ghost questions — at great risk" },
-      { name:"Voodoo Doll",          category:"cursed",   color:"#9a4040", pegQty:0, directional:false, desc:"Pins cause ghost activity spikes" },
-      { name:"Haunted Mirror",       category:"cursed",   color:"#607090", pegQty:0, directional:false, desc:"Shows the ghost's favourite room" },
-      { name:"Summoning Circle",     category:"cursed",   color:"#702020", pegQty:0, directional:false, desc:"Summons the ghost — always triggers a hunt" },
-      { name:"Monkey Paw",           category:"cursed",   color:"#6a5028", pegQty:0, directional:false, desc:"Grants wishes with dark consequences" },
-      { name:"Tarot Cards",          category:"cursed",   color:"#7850a0", pegQty:0, directional:false, desc:"Draw a card — random effect" },
+      // ── Cursed possessions — NOT on pegboard; one spawns in house per game ──
+      // spawnX/spawnY = fixed world position for that item when selected
+      { name:"Music Box",        category:"cursed", color:"#8a6080", pegQty:0, directional:false, desc:"Plays a melody — attracts the ghost",          spawnX:450, spawnY:220 }, // Living Room
+      { name:"Ouija Board",      category:"cursed", color:"#7a5820", pegQty:0, directional:false, desc:"Ask the ghost questions — at great risk",       spawnX:405, spawnY:510 }, // Study
+      { name:"Voodoo Doll",      category:"cursed", color:"#9a4040", pegQty:0, directional:false, desc:"Pins cause ghost activity spikes",              spawnX:170, spawnY:505 }, // Master Bed
+      { name:"Haunted Mirror",   category:"cursed", color:"#607090", pegQty:0, directional:false, desc:"Shows the ghost's favourite room",              spawnX:160, spawnY:150 }, // Bedroom 2
+      { name:"Summoning Circle", category:"cursed", color:"#702020", pegQty:0, directional:false, desc:"Summons the ghost — always triggers a hunt",    spawnX:616, spawnY:624 }, // Garage — center, clear of car and all walls
+      { name:"Monkey Paw",       category:"cursed", color:"#6a5028", pegQty:0, directional:false, desc:"Grants wishes with dark consequences",          spawnX:635, spawnY:300 }, // Kitchen
+      { name:"Tarot Cards",      category:"cursed", color:"#7850a0", pegQty:0, directional:false, desc:"Draw a card — random effect",                   spawnX:635, spawnY:140 }, // Dining Room
     ];
     // ─── Derived lookups (generated from ITEMS — do not edit manually) ───────
     const itemColors     = Object.fromEntries(ITEMS.map(it => [it.name, it.color]));
@@ -421,6 +422,15 @@
       selectedSlot = 0;
       flashlightOn = false;
       worldItems      = [];
+      // Always place the summoning circle as a fixed environment object (not pickupable)
+      const scItem = ITEMS.find(it => it.name === "Summoning Circle");
+      worldItems.push({ name: "Summoning Circle", x: scItem.spawnX, y: scItem.spawnY,
+                        facing: 0, active: false, written: false, writeAnimTimer: 0, fixed: true, candlesMask: 0 });
+      // Spawn one random non-circle cursed item in its fixed house location
+      const cursedPool = ITEMS.filter(it => it.category === "cursed" && it.name !== "Summoning Circle");
+      const cursedPick = cursedPool[Math.floor(Math.random() * cursedPool.length)];
+      worldItems.push({ name: cursedPick.name, x: cursedPick.spawnX, y: cursedPick.spawnY,
+                        facing: 0, active: false, written: false, writeAnimTimer: 0 });
       journalTab      = 0;
       evidenceStates  = {};
       ghostStates     = {};
@@ -438,6 +448,7 @@
       emfLevel = 0; emfSources = []; uvMarks = []; ghostOrbs = [];
       thermometerReading = 20;
       dotsDisturbTimer = 0; spiritBoxTimer = 0; spiritBoxListenTimer = 0; spiritBoxNoResponse = false;
+      summoningCircleTimer = 0;
       ghostTargetX = 0; ghostTargetY = 0;
       ghostMoveAngle = 0; ghostPauseTimer = 0; ghostWalkCycle = 0;
       vanDoor.open    = false;
@@ -479,12 +490,39 @@
       const pcx = player.x + player.width  / 2;
       const pcy = player.y + player.height / 2;
 
+      // Summoning Circle — lighter must be held and lit; must face the specific candle to light it
+      {
+        const sc = worldItems.find(it => it.name === "Summoning Circle" && it.fixed);
+        if (sc) {
+          const scCX = sc.x + 6, scCY = sc.y + 6;
+          // Compute world position of each of the 5 star-point candles (R2=36, same formula as draw)
+          for (let ci = 0; ci < 5; ci++) {
+            const a = ci * Math.PI * 2 / 5 - Math.PI / 2;
+            const candleWX = scCX + Math.cos(a) * 36;
+            const candleWY = scCY + Math.sin(a) * 36;
+            if (_isFacing(candleWX, candleWY, 44)) {
+              // Player is close enough and facing this specific candle
+              const lighterSelected = hasLighter && selectedSlot >= inventory.length;
+              if (lighterSelected && lighterLit && !((sc.candlesMask ?? 0) & (1 << ci))) {
+                sc.candlesMask = (sc.candlesMask ?? 0) | (1 << ci);
+                if (sc.candlesMask === 0b11111) {   // all 5 lit
+                  sc.active = true;
+                  summoningCircleTimer = 3;
+                }
+              }
+              return; // consumed — even if lighter not ready
+            }
+          }
+        }
+      }
+
       // World items — must be within 30px AND in front of the player
       const nearIdx = worldItems.findIndex(it =>
         _isFacing(it.x + 6, it.y + 6, 30)
       );
       if (nearIdx >= 0) {
         const it = worldItems[nearIdx];
+        if (it.fixed) { /* fixed env object — not pickupable */ } else
         if (it.name === "Tripod") {
           const heldCam = inventory[selectedSlot] === "Video Camera";
           if (heldCam && !it.mountedCamera) {
@@ -573,6 +611,7 @@
       );
       if (hitItemIdx >= 0) {
         const it = worldItems[hitItemIdx];
+        if (it.fixed) { /* fixed env object — not pickupable */ } else
         if (it.name === "Tripod") {
           const heldCam = inventory[selectedSlot] === "Video Camera";
           if (heldCam && !it.mountedCamera) {
@@ -648,24 +687,22 @@
       if (e.key.toLowerCase() === keybinds.drop && !e.repeat) {
         if (gameRunning && inventory[selectedSlot]) {
           const name = inventory[selectedSlot];
-          // G = instant drop for ALL items including Journal and Camera.
-          // Journal drops closed/inactive. Camera drops at feet (no placement mode).
+          // G = instant drop. Ghost Book drops closed/inactive. Camera drops at feet.
           // Intentional placement is V (keybinds.place).
           const px = player.x + player.width  / 2 + Math.cos(playerAngle) * 22 - 6;
           const py = player.y + player.height / 2 + Math.sin(playerAngle) * 22 - 6;
           const placedActive = name === "Flashlight"    ? flashlightOn
                              : name === "UV Flashlight" ? uvFlashlightOn
-                             : name === "Journal"       ? false   // drop = always closed/inactive
+                             : name === "Ghost Book"    ? false   // drop = always closed/inactive
                              : heldItemOn;
           const newItem = { name, x: px, y: py, facing: playerAngle, active: placedActive };
-          if (name === "Ghost Book" || name === "Journal") { newItem.written = false; newItem.writeAnimTimer = 0; }
+          if (name === "Ghost Book") { newItem.written = false; newItem.writeAnimTimer = 0; }
           if (name === "Tripod") { newItem.mountedCamera = null; }
           worldItems.push(newItem);
           inventory.splice(selectedSlot, 1);
           if (selectedSlot >= inventory.length) selectedSlot = Math.max(0, inventory.length - 1);
           if (name === "Flashlight")    flashlightOn   = false;
           if (name === "UV Flashlight") uvFlashlightOn = false;
-          if (name === "Journal")       journalOpen    = false;
           heldItemOn = false; heldItemUsing = false;
         }
       }
@@ -674,7 +711,7 @@
       if (e.key.toLowerCase() === keybinds.place && !e.repeat) {
         if (gameRunning && inventory[selectedSlot]) {
           const name = inventory[selectedSlot];
-          if (name === "Video Camera" || name === "Journal" || name === "Ghost Book") {
+          if (name === "Video Camera" || name === "Ghost Book") {
             // V down = enter placement preview; V up = commit if valid, cancel if not.
             // Journal: placed = open/active. Camera: placed = on surface/tripod.
             placementPreview.active            = true;
@@ -874,9 +911,7 @@
       { x:613, y:296, w:62, h:24, label:"Island",        style:"counter" }, // center island — camera surface
 
       // ── Garage (560,500 → 740,720) ────────────────────────────────────────
-      { x:565, y:694, w:162,h:18, label:"Workbench",     style:"wood"    }, // south wall — camera surface
-      { x:723, y:506, w:14, h:90, label:"Shelf",         style:"wood"    }, // east wall  — camera surface
-      { x:565, y:506, w:20, h:40, label:"Tool Cabinet",  style:"wood"    }, // NW corner
+      { x:685, y:508, w:48, h:110, label:"Car",           style:"car"     }, // parked car — portrait, against east wall
 
       // ── Master Bed (80,460 → 300,600) ─────────────────────────────────────
       { x:146, y:464, w:92, h:55, label:"Bed",           style:"bed"     }, // north wall — queen bed
@@ -1596,9 +1631,8 @@
           inventory.splice(selectedSlot, 1);
           if (selectedSlot >= inventory.length) selectedSlot = Math.max(0, inventory.length - 1);
           heldItemOn = false; heldItemUsing = false;
-        } else if (placementPreview.valid && (inventory[selectedSlot] === "Journal" || inventory[selectedSlot] === "Ghost Book")) {
-          // Same flow as camera: valid surface → place. No surface → cancel (stays in hand).
-          // Placed via this path = always open/active (ghost can write in it).
+        } else if (placementPreview.valid && inventory[selectedSlot] === "Ghost Book") {
+          // Place open/active — ghost can write in it.
           const bookName = inventory[selectedSlot];
           const newItem = { name: bookName,
                             x: placementPreview.x - 6, y: placementPreview.y - 6,
@@ -2052,8 +2086,15 @@
         }
         if (dotsDisturbTimer > 0) dotsDisturbTimer -= delta;
         if (spiritBoxTimer   > 0) spiritBoxTimer   -= delta;
+        if (summoningCircleTimer > 0) {
+          summoningCircleTimer -= delta;
+          if (summoningCircleTimer <= 0) {
+            summoningCircleTimer = 0;
+            // Candles stay lit; only the ghost manifestation ends
+          }
+        }
         for (const it of worldItems) {
-          if ((it.name === "Ghost Book" || it.name === "Journal") && it.writeAnimTimer > 0) it.writeAnimTimer -= delta;
+          if (it.name === "Ghost Book" && it.writeAnimTimer > 0) it.writeAnimTimer -= delta;
         }
 
         // Thermometer — distance-based target; slow mercury-style lerp
@@ -2177,7 +2218,7 @@
             // Ghost Writing — active unwritten Ghost Book OR open placed Journal within 120px
             if (ev.includes("Ghost Writing")) {
               const book = worldItems.find(it =>
-                (it.name === "Ghost Book" || it.name === "Journal") &&
+                it.name === "Ghost Book" &&
                 it.active && !it.written &&
                 Math.hypot(it.x + 6 - ghostX, it.y + 6 - ghostY) < 120
               );
@@ -2258,7 +2299,7 @@
         const cx = player.x + 8, cy = player.y + 8;
         const probeX = cx + Math.cos(placementPreview.lockedPlayerAngle) * 30;
         const probeY = cy + Math.sin(placementPreview.lockedPlayerAngle) * 30;
-        const isJournal = placementPreview.item === "Journal" || placementPreview.item === "Ghost Book";
+        const isJournal = placementPreview.item === "Ghost Book";
 
         // Check furniture surfaces — snap to center of matched rect
         const hitFurniture = furniture.find(f =>
@@ -2390,6 +2431,186 @@
       }
 
       // (Round ends via van keypad "Leave Site" button — not the exit zone)
+    }
+
+    // --- HUD item icon helper ---
+    // Draws a small recognizable icon for the given item at (0,0), sized to fit ~±11px.
+    // Caller: translate to center, scale if needed, clip to circle first.
+    function _drawHUDIcon(c, name) {
+      switch (name) {
+        case "Flashlight":
+          c.fillStyle = "#8a7010"; c.fillRect(-9,-3,16,6);
+          c.fillStyle = "#c8a820"; c.fillRect(5,-4,6,8);
+          c.fillStyle = "#ffffa0"; c.beginPath(); c.arc(10,0,3,0,Math.PI*2); c.fill();
+          break;
+        case "UV Flashlight":
+          c.fillStyle = "#5a5a20"; c.fillRect(-9,-3,16,6);
+          c.fillStyle = "#a0a040"; c.fillRect(4,-5,7,10);
+          c.fillStyle = "rgba(160,160,255,0.7)"; c.beginPath(); c.arc(9,0,4,0,Math.PI*2); c.fill();
+          c.fillStyle = "#d0d0ff"; c.fillRect(5,-3,5,6);
+          break;
+        case "EMF Reader":
+          c.fillStyle = "#2a5a80"; c.fillRect(-7,-5,14,10);
+          c.fillStyle = "#4a8ab0"; c.fillRect(-5,-4,10,8);
+          c.fillStyle = "#6aaad0"; c.fillRect(-1,-10,3,6);
+          c.fillStyle = "#e84040"; c.fillRect(-4,-1,3,3);
+          c.fillStyle = "#40e840"; c.fillRect(0,-1,3,3);
+          break;
+        case "Spirit Box":
+          c.fillStyle = "#3a3020"; c.fillRect(-7,-6,14,12);
+          c.fillStyle = "#5a4a30"; c.fillRect(-5,-4,10,6);
+          c.fillStyle = "#1a1410";
+          for (let r=0;r<2;r++) for (let cc=0;cc<3;cc++) c.fillRect(-4+cc*3,-3+r*3,2,2);
+          c.fillStyle = "#e84020"; c.fillRect(-5,3,4,3);
+          break;
+        case "Ghost Book":
+          c.fillStyle = "#e8e0c8"; c.fillRect(-8,-7,7,14);
+          c.fillStyle = "#f0e8d0"; c.fillRect(-1,-7,8,14);
+          c.fillStyle = "#8a6840"; c.fillRect(-2,-7,2,14);
+          c.strokeStyle="rgba(100,130,200,0.4)"; c.lineWidth=0.6;
+          for(let l=-5;l<=5;l+=3){c.beginPath();c.moveTo(-7,l);c.lineTo(-2,l);c.stroke();}
+          break;
+        case "Video Camera":
+          c.fillStyle = "#1a1a1a"; c.fillRect(-8,-5,16,10);
+          c.fillStyle = "#0a0a14"; c.beginPath(); c.arc(-2,0,4,0,Math.PI*2); c.fill();
+          c.fillStyle = "#1a1a40"; c.beginPath(); c.arc(-2,0,2,0,Math.PI*2); c.fill();
+          c.fillStyle = "#e84040"; c.fillRect(5,-4,3,3);
+          break;
+        case "Thermometer":
+          c.fillStyle = "#909090"; c.fillRect(-1,-11,3,16);
+          c.fillStyle = "#c0c0c0"; c.fillRect(-0.5,-10,2,13);
+          c.fillStyle = "#e03030"; c.beginPath(); c.arc(0.5,6,3,0,Math.PI*2); c.fill();
+          c.fillStyle = "#e05050"; c.beginPath(); c.arc(0,5,1.5,0,Math.PI*2); c.fill();
+          break;
+        case "Sound Recorder":
+          c.fillStyle = "#2a2a2a"; c.fillRect(-6,-8,12,16);
+          c.fillStyle = "#404040"; c.fillRect(-4,-6,8,10);
+          c.fillStyle = "#1a1a1a";
+          for(let r=0;r<2;r++) for(let cc=0;cc<2;cc++) c.fillRect(-3+cc*4,-5+r*4,3,3);
+          c.fillStyle = "#e84040"; c.fillRect(-4,5,4,3);
+          break;
+        case "D.O.T.S. Projector":
+          c.fillStyle = "#1a1a2a"; c.fillRect(-9,-4,18,8);
+          c.fillStyle = "#e840e8";
+          for(let r=0;r<2;r++) for(let cc=0;cc<4;cc++) c.fillRect(-7+cc*4,-2+r*4,2,2);
+          c.fillStyle = "#6040c0"; c.fillRect(-9,4,18,3);
+          break;
+        case "Tripod":
+          c.strokeStyle="#606050"; c.lineWidth=2;
+          c.beginPath(); c.moveTo(0,8); c.lineTo(0,-8); c.stroke();
+          c.beginPath(); c.moveTo(0,8); c.lineTo(-9,11); c.stroke();
+          c.beginPath(); c.moveTo(0,8); c.lineTo( 9,11); c.stroke();
+          c.fillStyle="#909080"; c.beginPath(); c.arc(0,-4,3,0,Math.PI*2); c.fill();
+          break;
+        case "Sanity Meds":
+          c.fillStyle="#e8e8e0"; c.beginPath(); c.arc(0,2,7,0,Math.PI*2); c.fill();
+          c.fillStyle="#e84020"; c.beginPath(); c.arc(0,-2,4.5,Math.PI,0); c.fill();
+          c.fillStyle="#4080c0"; c.fillRect(-5,0,10,5);
+          c.fillStyle="#fff"; c.fillRect(-1,-1,2,6); c.fillRect(-3,1,6,2);
+          break;
+        case "Lighter":
+          c.fillStyle="#c8a020"; c.fillRect(-5,-6,10,12);
+          c.fillStyle="#e0b830"; c.fillRect(-4,-5,8,10);
+          c.fillStyle="#8a6e10"; c.fillRect(-5,-8,10,3);
+          c.fillStyle="rgba(255,160,20,0.85)"; c.beginPath(); c.arc(0,-11,4,0,Math.PI*2); c.fill();
+          c.fillStyle="rgba(255,240,80,0.8)"; c.beginPath(); c.arc(0,-13,2,0,Math.PI*2); c.fill();
+          break;
+        case "Firelight":
+          c.fillStyle="#6a4820"; c.fillRect(-4,4,8,6);
+          c.strokeStyle="#c89040"; c.lineWidth=1.2;
+          c.beginPath(); c.moveTo(0,4); c.lineTo(-2,-7); c.stroke();
+          c.beginPath(); c.moveTo(0,4); c.lineTo(2,-7); c.stroke();
+          c.fillStyle="rgba(255,160,20,0.85)"; c.beginPath(); c.arc(0,-9,3,0,Math.PI*2); c.fill();
+          break;
+        case "Incense":
+          c.fillStyle="#6a4828"; c.fillRect(-5,6,10,5);
+          c.strokeStyle="#c89040"; c.lineWidth=1;
+          c.beginPath(); c.moveTo(0,6); c.lineTo(-2,-9); c.stroke();
+          c.beginPath(); c.moveTo(0,6); c.lineTo(2,-9); c.stroke();
+          c.fillStyle="#e84000"; c.beginPath(); c.arc(-2,-9,1.5,0,Math.PI*2); c.fill();
+          c.beginPath(); c.arc(2,-9,1.5,0,Math.PI*2); c.fill();
+          break;
+        case "Crucifix":
+          c.fillStyle="#c89830"; c.fillRect(-2,-10,5,20); c.fillRect(-9,-2,18,5);
+          c.fillStyle="#e8b840"; c.fillRect(-1,-9,3,18); c.fillRect(-8,-1,16,3);
+          break;
+        case "Photo Camera":
+          c.fillStyle="#303030"; c.fillRect(-9,-6,18,12);
+          c.fillStyle="#0a0a14"; c.beginPath(); c.arc(0,0,5,0,Math.PI*2); c.fill();
+          c.fillStyle="#1a1a40"; c.beginPath(); c.arc(0,0,3,0,Math.PI*2); c.fill();
+          c.fillStyle="#e84040"; c.fillRect(5,-5,3,3);
+          break;
+        case "Music Box":
+          c.fillStyle="#6a3060"; c.fillRect(-8,-5,14,10);
+          c.fillStyle="#8a4080"; c.fillRect(-7,-4,11,7);
+          c.fillStyle="#c080a0"; c.fillRect(-7,-5,11,2);
+          c.fillStyle="#d0a830"; c.fillRect(5,-1,4,2);
+          c.fillStyle="#e8c040"; c.beginPath(); c.arc(9,0,2.5,0,Math.PI*2); c.fill();
+          break;
+        case "Ouija Board":
+          c.fillStyle="#7a5820"; c.fillRect(-9,-6,18,12);
+          c.fillStyle="#9a7030"; c.fillRect(-8,-5,16,10);
+          c.strokeStyle="#c8a060"; c.lineWidth=0.6;
+          c.beginPath(); c.arc(0,-1,5,Math.PI,0); c.stroke();
+          c.fillStyle="#c8a060"; c.font="2.5px monospace"; c.textAlign="center";
+          c.fillText("YES",-4,4); c.fillText("NO",4,4); c.textAlign="left";
+          c.fillStyle="#e8c880"; c.beginPath(); c.moveTo(0,-5); c.lineTo(-2,0); c.lineTo(2,0); c.closePath(); c.fill();
+          break;
+        case "Voodoo Doll":
+          c.fillStyle="#8a6850"; c.fillRect(-4,-10,8,16);
+          c.fillStyle="#a07860"; c.fillRect(-3,-9,6,14);
+          c.fillStyle="#8a6850"; c.beginPath(); c.arc(0,-12,4,0,Math.PI*2); c.fill();
+          c.fillStyle="#a07860"; c.beginPath(); c.arc(0,-12,3,0,Math.PI*2); c.fill();
+          c.strokeStyle="#c0c0c0"; c.lineWidth=0.8;
+          c.beginPath(); c.moveTo(5,-2); c.lineTo(10,-2); c.stroke();
+          c.fillStyle="#e0e0e0"; c.beginPath(); c.arc(10,-2,1.5,0,Math.PI*2); c.fill();
+          break;
+        case "Haunted Mirror":
+          c.fillStyle="#4a5060"; c.beginPath(); c.ellipse(0,0,7,9,0,0,Math.PI*2); c.fill();
+          c.fillStyle="#141218"; c.beginPath(); c.ellipse(0,0,5,7,0,0,Math.PI*2); c.fill();
+          c.fillStyle="rgba(150,180,255,0.22)"; c.beginPath(); c.ellipse(-0.5,-0.5,3,5,0,0,Math.PI*2); c.fill();
+          c.fillStyle="rgba(220,230,255,0.18)"; c.fillRect(-1,-6,2,12);
+          break;
+        case "Summoning Circle":
+          c.strokeStyle="#c0b8a0"; c.lineWidth=1;
+          c.beginPath(); c.arc(0,0,9,0,Math.PI*2); c.stroke();
+          c.beginPath(); c.arc(0,0,6,0,Math.PI*2); c.stroke();
+          c.strokeStyle="#a09080"; c.lineWidth=0.7;
+          for(let p=0;p<5;p++){
+            const a1=(p*2-.5)*Math.PI/2.5, a2=((p+2)*2-.5)*Math.PI/2.5;
+            c.beginPath(); c.moveTo(Math.cos(a1)*6,Math.sin(a1)*6);
+            c.lineTo(Math.cos(a2)*6,Math.sin(a2)*6); c.stroke();
+          }
+          c.fillStyle="rgba(180,20,20,0.65)"; c.beginPath(); c.arc(0,0,2,0,Math.PI*2); c.fill();
+          break;
+        case "Monkey Paw":
+          c.fillStyle="#5a3820"; c.fillRect(-4,-6,8,12);
+          c.fillStyle="#7a5030"; c.fillRect(-3,-5,6,10);
+          c.strokeStyle="#5a3820"; c.lineWidth=1.8; c.lineCap="round";
+          c.beginPath(); c.moveTo(-2,-5); c.quadraticCurveTo(-5,-9,-3,-11); c.stroke();
+          c.beginPath(); c.moveTo(0,-5); c.quadraticCurveTo(0,-10,2,-11); c.stroke();
+          c.beginPath(); c.moveTo(3,-5); c.quadraticCurveTo(6,-8,4,-11); c.stroke();
+          c.lineCap="butt";
+          c.fillStyle="#c0a070";
+          c.beginPath(); c.arc(-3,-11,1.2,0,Math.PI*2); c.fill();
+          c.beginPath(); c.arc(2,-11,1.2,0,Math.PI*2); c.fill();
+          break;
+        case "Tarot Cards":
+          c.save(); c.rotate(-0.18);
+          c.fillStyle="#2a1840"; c.fillRect(-5,-9,10,14);
+          c.fillStyle="#7850a0"; c.fillRect(-4,-8,8,12);
+          c.restore(); c.save(); c.rotate(0.1);
+          c.fillStyle="#2a1840"; c.fillRect(-5,-9,10,14);
+          c.fillStyle="#7850a0"; c.fillRect(-4,-8,8,12);
+          c.fillStyle="#f0e0ff"; c.fillRect(-3,-7,6,10);
+          c.fillStyle="#9060c0"; c.font="6px serif"; c.textAlign="center";
+          c.fillText("★",0,1); c.textAlign="left";
+          c.restore();
+          break;
+        default:
+          c.fillStyle = itemColors[name] || "#888";
+          c.beginPath(); c.arc(0,0,8,0,Math.PI*2); c.fill();
+      }
     }
 
     // --- Draw ---
@@ -2985,6 +3206,40 @@
           continue;
         }
 
+        // ── Car: top-down parked sedan ─────────────────────────────────────
+        if (fs === "car") {
+          const cx = f.x + f.w/2, cy = f.y + f.h/2;
+          const cw = f.w, ch = f.h;
+          // shadow
+          ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(f.x+3, f.y+4, cw, ch);
+          // body shell
+          ctx.fillStyle = "#2a3a4a"; ctx.fillRect(f.x, f.y, cw, ch);
+          // roof cutaway (lighter rectangle in upper centre — the cabin)
+          const roofX = f.x + cw*0.22, roofY = f.y + ch*0.16;
+          const roofW = cw*0.56, roofH = ch*0.68;
+          ctx.fillStyle = "#1a2830"; ctx.fillRect(roofX, roofY, roofW, roofH);
+          // windshield (front)
+          ctx.fillStyle = "rgba(100,160,200,0.35)"; ctx.fillRect(f.x + cw*0.24, f.y + ch*0.05, cw*0.52, ch*0.14);
+          // rear window
+          ctx.fillStyle = "rgba(80,120,160,0.28)"; ctx.fillRect(f.x + cw*0.24, f.y + ch*0.81, cw*0.52, ch*0.12);
+          // side trim lines
+          ctx.strokeStyle = "#3a5060"; ctx.lineWidth = 1;
+          ctx.strokeRect(f.x+1, f.y+1, cw-2, ch-2);
+          // headlights
+          ctx.fillStyle = "#e8e0a0"; ctx.fillRect(f.x+cw*0.26, f.y+2, cw*0.18, 4);
+          ctx.fillRect(f.x+cw*0.56, f.y+2, cw*0.18, 4);
+          // tail lights
+          ctx.fillStyle = "#c02020"; ctx.fillRect(f.x+cw*0.26, f.y+ch-6, cw*0.18, 4);
+          ctx.fillRect(f.x+cw*0.56, f.y+ch-6, cw*0.18, 4);
+          // wheels (four corners)
+          ctx.fillStyle = "#101010";
+          [[f.x+2, f.y+4], [f.x+cw-8, f.y+4], [f.x+2, f.y+ch-8], [f.x+cw-8, f.y+ch-8]].forEach(([wx,wy]) => {
+            ctx.fillRect(wx, wy, 6, 4);
+            ctx.fillStyle="#282828"; ctx.fillRect(wx+1,wy+1,4,2); ctx.fillStyle="#101010";
+          });
+          continue;
+        }
+
         // ── Standard elevated furniture (wood / bed / counter / seat) ─────────
         ctx.fillStyle = "rgba(0,0,0,0.28)"; ctx.fillRect(f.x + 2, f.y + 3, f.w, f.h); // drop shadow
         ctx.fillStyle = cBase;  ctx.fillRect(f.x,     f.y,     f.w,     f.h);
@@ -3239,58 +3494,6 @@
             }
           }
 
-        } else if (it.name === "Journal") {
-          if (!on) {
-            // Closed journal — worn leather cover
-            ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(-8, -5, 17, 10);
-            ctx.fillStyle = "#7a5030"; ctx.fillRect(-7, -4, 15, 8);   // cover
-            ctx.fillStyle = "#9a6840"; ctx.fillRect(-6, -3, 13, 6);   // cover highlight
-            ctx.fillStyle = "#5a3818"; ctx.fillRect(-2, -4, 2, 8);    // spine
-            ctx.fillStyle = "#c89060"; ctx.fillRect(-1, -4, 1, 8);    // spine highlight
-            ctx.fillStyle = "#c8a040";
-            ctx.fillRect(5, -4, 2, 1); ctx.fillRect(5, 3, 2, 1);     // corner clasps
-            ctx.fillStyle = "#e8dcc0"; ctx.fillRect(7, -3, 1, 6);     // page edge
-          } else {
-            // Open journal — two-page spread, writable by ghost
-            const shaking = it.writeAnimTimer > 0;
-            const shk = shaking ? (Math.random() - 0.5) * 2.5 : 0;
-            ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(-9 + shk, -7, 20, 14);
-            ctx.fillStyle = "#e8e0c8"; ctx.fillRect(-8 + shk, -6, 8, 12); // left page
-            ctx.fillStyle = "#f0e8d0"; ctx.fillRect( 0 + shk, -6, 8, 12); // right page
-            ctx.fillStyle = "#7a5030"; ctx.fillRect(-1 + shk, -6, 2, 12); // spine (leather tone)
-            // Ruled lines
-            ctx.strokeStyle = "rgba(100,130,200,0.35)"; ctx.lineWidth = 0.5;
-            for (let rl = -4; rl <= 4; rl += 2) {
-              ctx.beginPath(); ctx.moveTo(-7 + shk, rl); ctx.lineTo(-1 + shk, rl); ctx.stroke();
-              ctx.beginPath(); ctx.moveTo( 1 + shk, rl); ctx.lineTo( 7 + shk, rl); ctx.stroke();
-            }
-            if (it.written) {
-              // Ghost has written in it — ink bleed tint + heavy dark scrawls
-              const lx = shk;
-              const inkA = shaking ? 0.5 + Math.random() * 0.4 : 1.0;
-              // Ink bleed: subtle dark-purple stain across both pages (visible even at small scale)
-              ctx.fillStyle = shaking
-                ? `rgba(80,40,180,${0.22 + Math.random() * 0.1})`
-                : "rgba(40,20,90,0.18)";
-              ctx.fillRect(-8+lx,-6,7,12);  // left page bleed
-              ctx.fillRect(0+lx,-6,8,12);   // right page bleed
-              // Thick ink scrawls — lineWidth 2 so they're readable after 0.75× scale
-              ctx.strokeStyle = `rgba(12,6,40,${inkA})`; ctx.lineWidth = 2;
-              ctx.lineCap = "round";
-              const lp = lx; // left page strokes
-              ctx.beginPath(); ctx.moveTo(-7+lp,-4); ctx.lineTo(-4+lp,-3); ctx.lineTo(-2+lp,-4); ctx.stroke();
-              ctx.beginPath(); ctx.moveTo(-7+lp,-1); ctx.lineTo(-3+lp, 0); ctx.lineTo(-5+lp, 1); ctx.stroke();
-              ctx.beginPath(); ctx.moveTo(-7+lp, 3); ctx.lineTo(-3+lp, 2); ctx.stroke();
-              ctx.beginPath(); ctx.moveTo(-6+lp, 4); ctx.lineTo(-3+lp, 5); ctx.stroke();
-              const rp = lx; // right page strokes
-              ctx.beginPath(); ctx.moveTo(1+rp,-5); ctx.lineTo(4+rp,-4); ctx.lineTo(6+rp,-5); ctx.stroke();
-              ctx.beginPath(); ctx.moveTo(1+rp,-2); ctx.lineTo(5+rp,-1); ctx.stroke();
-              ctx.beginPath(); ctx.moveTo(2+rp, 2); ctx.lineTo(6+rp, 1); ctx.lineTo(4+rp, 3); ctx.stroke();
-              ctx.beginPath(); ctx.moveTo(1+rp, 4); ctx.lineTo(4+rp, 5); ctx.stroke();
-              ctx.lineCap = "butt"; // reset
-            }
-          }
-
         } else if (it.name === "Lighter") {
           // Small flip lighter
           ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(-4, -5, 10, 10);
@@ -3391,6 +3594,181 @@
             ctx.restore();
           }
 
+        } else if (it.name === "Music Box") {
+          // Small box with a winding key on top
+          ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(-6,-5,14,10);
+          ctx.fillStyle = "#6a3060"; ctx.fillRect(-5,-4,12,8);   // box body
+          ctx.fillStyle = "#8a4080"; ctx.fillRect(-4,-3,10,6);   // lid face
+          ctx.fillStyle = "#c080a0"; ctx.fillRect(-4,-4,10,2);   // lid trim
+          ctx.fillStyle = "#e8d0c0"; ctx.fillRect(-2,-3,6,4);    // felt interior hint
+          // winding key
+          ctx.fillStyle = "#d0a830"; ctx.fillRect(5,-1,3,2);
+          ctx.fillStyle = "#e8c040"; ctx.beginPath(); ctx.arc(9,0,2.5,0,Math.PI*2); ctx.fill();
+
+        } else if (it.name === "Ouija Board") {
+          // Flat rectangular board with lettering hint
+          ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(-10,-7,22,14);
+          ctx.fillStyle = "#7a5820"; ctx.fillRect(-9,-6,20,12);  // board
+          ctx.fillStyle = "#9a7030"; ctx.fillRect(-8,-5,18,10);  // face
+          // arc of letters hint
+          ctx.strokeStyle = "#c8a060"; ctx.lineWidth = 0.6;
+          ctx.beginPath(); ctx.arc(0,-1,5,Math.PI,0); ctx.stroke();
+          // YES / NO text hints
+          ctx.fillStyle = "#c8a060"; ctx.font = "2.5px monospace"; ctx.textAlign = "center";
+          ctx.fillText("YES", -5, 3); ctx.fillText("NO", 5, 3); ctx.textAlign = "left";
+          // planchette (small triangle)
+          ctx.fillStyle = "#e8c880"; ctx.beginPath();
+          ctx.moveTo(0,-5); ctx.lineTo(-2,1); ctx.lineTo(2,1); ctx.closePath(); ctx.fill();
+
+        } else if (it.name === "Voodoo Doll") {
+          // Rough cloth figure
+          ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(-5,-9,12,18);
+          ctx.fillStyle = "#8a6850"; ctx.fillRect(-4,-8,10,16);  // body burlap
+          ctx.fillStyle = "#a07860"; ctx.fillRect(-3,-7,8,14);   // body highlight
+          // head (circle)
+          ctx.fillStyle = "#8a6850"; ctx.beginPath(); ctx.arc(1,-10,4,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle = "#a07860"; ctx.beginPath(); ctx.arc(1,-10,3,0,Math.PI*2); ctx.fill();
+          // X eyes
+          ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.8;
+          ctx.beginPath(); ctx.moveTo(-1,-11); ctx.lineTo(0,-10); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0,-11); ctx.lineTo(-1,-10); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(2,-11); ctx.lineTo(3,-10); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(3,-11); ctx.lineTo(2,-10); ctx.stroke();
+          // pins
+          ctx.strokeStyle = "#c0c0c0"; ctx.lineWidth = 0.8;
+          ctx.beginPath(); ctx.moveTo(3,-4); ctx.lineTo(7,-4); ctx.stroke();
+          ctx.fillStyle = "#e0e0e0"; ctx.beginPath(); ctx.arc(7,-4,1.2,0,Math.PI*2); ctx.fill();
+
+        } else if (it.name === "Haunted Mirror") {
+          // Oval mirror with dark frame
+          ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.beginPath(); ctx.ellipse(0,0,8,10,0,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle = "#4a5060"; ctx.beginPath(); ctx.ellipse(0,0,7,9,0,0,Math.PI*2); ctx.fill();   // frame
+          ctx.fillStyle = "#607090"; ctx.beginPath(); ctx.ellipse(0,0,6,8,0,0,Math.PI*2); ctx.fill();   // frame inner
+          ctx.fillStyle = "#1a1820"; ctx.beginPath(); ctx.ellipse(0,0,5,7,0,0,Math.PI*2); ctx.fill();   // glass dark
+          // ghostly reflection shimmer
+          ctx.fillStyle = "rgba(150,180,255,0.18)"; ctx.beginPath(); ctx.ellipse(-1,-1,4,5,0,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle = "rgba(200,220,255,0.12)"; ctx.fillRect(-3,-4,2,8);  // vertical reflection
+
+        } else if (it.name === "Summoning Circle") {
+          // Large floor marking — drawn at 2× to cancel the outer 0.5 scale = full world size
+          ctx.save();
+          ctx.scale(2, 2);
+          const R = 42, R2 = 36; // outer ring, inner ring
+          // dark stain wash
+          ctx.fillStyle = "rgba(60,0,0,0.18)"; ctx.beginPath(); ctx.arc(0,0,R+4,0,Math.PI*2); ctx.fill();
+          // outer rings
+          ctx.strokeStyle = "rgba(0,0,0,0.55)"; ctx.lineWidth = 2.5;
+          ctx.beginPath(); ctx.arc(0,0,R+1,0,Math.PI*2); ctx.stroke();
+          ctx.strokeStyle = "#d0c090"; ctx.lineWidth = 1.8;
+          ctx.beginPath(); ctx.arc(0,0,R,0,Math.PI*2); ctx.stroke();
+          ctx.strokeStyle = "#b0a070"; ctx.lineWidth = 1.2;
+          ctx.beginPath(); ctx.arc(0,0,R-4,0,Math.PI*2); ctx.stroke();
+          ctx.beginPath(); ctx.arc(0,0,R2,0,Math.PI*2); ctx.stroke();   // inner ring
+          // pentagram (5-point star connecting every-other vertex)
+          const starPts = [];
+          for (let p = 0; p < 5; p++) {
+            const a = p * Math.PI * 2 / 5 - Math.PI / 2;
+            starPts.push([Math.cos(a)*R2, Math.sin(a)*R2]);
+          }
+          ctx.strokeStyle = "#c04020"; ctx.lineWidth = 1.4;
+          ctx.shadowColor = "rgba(200,30,0,0.5)"; ctx.shadowBlur = 4;
+          ctx.beginPath();
+          [0,2,4,1,3,0].forEach((i,j) => j===0 ? ctx.moveTo(starPts[i][0],starPts[i][1]) : ctx.lineTo(starPts[i][0],starPts[i][1]));
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+          // rune symbols at star inner intersections (simplified glyphs)
+          ctx.fillStyle = "rgba(180,30,10,0.7)"; ctx.font = "7px serif"; ctx.textAlign = "center";
+          const runeR = 14;
+          ["ᚠ","ᚢ","ᚦ","ᚨ","ᚱ"].forEach((rune, i) => {
+            const a = i * Math.PI * 2 / 5 - Math.PI / 2;
+            ctx.fillText(rune, Math.cos(a)*runeR, Math.sin(a)*runeR + 2.5);
+          });
+          ctx.textAlign = "left";
+          // When activated, add a pulsing blood-red wash over the circle
+          const scMask = it.candlesMask ?? 0;
+          const scLit = scMask === 0b11111; // all 5 candles lit
+          if (scLit) {
+            const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 200);
+            const litWash = ctx.createRadialGradient(0,0,4,0,0,R);
+            litWash.addColorStop(0, `rgba(200,20,0,${0.18 + pulse * 0.10})`);
+            litWash.addColorStop(1, "rgba(120,0,0,0)");
+            ctx.fillStyle = litWash; ctx.beginPath(); ctx.arc(0,0,R,0,Math.PI*2); ctx.fill();
+          }
+          // center orb — grows as candles are lit (count set bits)
+          let litCount = 0; for (let b=0;b<5;b++) if (scMask & (1<<b)) litCount++;
+          const orbR = 6 + litCount * 1.6; // 6 → 14 as candles light
+          const orbAlpha = 0.6 + litCount * 0.08;
+          const cg = ctx.createRadialGradient(0,0,1,0,0,orbR);
+          cg.addColorStop(0, `rgba(255,80,20,${orbAlpha})`);
+          cg.addColorStop(1,"rgba(150,0,0,0)");
+          ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(0,0,orbR,0,Math.PI*2); ctx.fill();
+          // candles at each star point — each lit independently by bitmask
+          starPts.forEach(([px, py], ci) => {
+            const candleLit = (scMask & (1 << ci)) !== 0;
+            // wax body — red taper
+            ctx.fillStyle = "#8a1010"; ctx.fillRect(px-2, py-5, 4, 8);
+            ctx.fillStyle = "#b02020"; ctx.fillRect(px-1.5, py-4.5, 3, 7);
+            // drip accents
+            ctx.fillStyle = "#701010"; ctx.fillRect(px-1, py+2, 1, 2);
+            // wick
+            ctx.strokeStyle = "#200808"; ctx.lineWidth = 0.8;
+            ctx.beginPath(); ctx.moveTo(px, py-5); ctx.lineTo(px, py-7); ctx.stroke();
+            if (candleLit) {
+              // red flame — flickering
+              const flicker = 0.8 + 0.2 * Math.sin(Date.now() / 80 + px * 3.7);
+              const flameGrad = ctx.createRadialGradient(px, py-9, 0, px, py-8, 5);
+              flameGrad.addColorStop(0, `rgba(255,160,80,${flicker})`);   // hot inner core (orange-red)
+              flameGrad.addColorStop(0.4, `rgba(220,20,20,0.9)`);         // mid red
+              flameGrad.addColorStop(1, "rgba(120,0,0,0)");               // fade out
+              ctx.fillStyle = flameGrad;
+              ctx.beginPath(); ctx.ellipse(px, py-9, 2.5, 4.5, 0, 0, Math.PI*2); ctx.fill();
+              // red glow halo
+              const glowG = ctx.createRadialGradient(px, py-8, 1, px, py-8, 18);
+              glowG.addColorStop(0, "rgba(200,20,0,0.35)");
+              glowG.addColorStop(1, "rgba(140,0,0,0)");
+              ctx.fillStyle = glowG; ctx.beginPath(); ctx.arc(px, py-8, 18, 0, Math.PI*2); ctx.fill();
+            } else {
+              // unlit — dark smoldering wick tip
+              ctx.fillStyle = "rgba(60,10,10,0.6)";
+              ctx.beginPath(); ctx.arc(px, py-7, 1, 0, Math.PI*2); ctx.fill();
+            }
+          });
+          ctx.restore();
+
+        } else if (it.name === "Monkey Paw") {
+          // Dried curled paw shape
+          ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.fillRect(-5,-7,12,14);
+          ctx.fillStyle = "#5a3820"; ctx.fillRect(-4,-6,10,12);   // palm base
+          ctx.fillStyle = "#7a5030"; ctx.fillRect(-3,-5,8,10);    // palm face
+          // fingers (curled lines)
+          ctx.strokeStyle = "#5a3820"; ctx.lineWidth = 2; ctx.lineCap = "round";
+          ctx.beginPath(); ctx.moveTo(-3,-5); ctx.quadraticCurveTo(-6,-9,-4,-11); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo( 0,-5); ctx.quadraticCurveTo( 0,-10,2,-11); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo( 4,-5); ctx.quadraticCurveTo( 7,-9, 5,-11); ctx.stroke();
+          ctx.lineCap = "butt";
+          // nail tips
+          ctx.fillStyle = "#c0a070";
+          ctx.beginPath(); ctx.arc(-4,-11,1.5,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(2,-11,1.5,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(5,-11,1.5,0,Math.PI*2); ctx.fill();
+
+        } else if (it.name === "Tarot Cards") {
+          // Small deck of cards fanned slightly
+          // Bottom card (leftmost of fan)
+          ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(-5,-7,12,14);
+          ctx.save(); ctx.rotate(-0.18);
+          ctx.fillStyle = "#2a1840"; ctx.fillRect(-4,-8,10,14);  // back card
+          ctx.fillStyle = "#7850a0"; ctx.fillRect(-3,-7,8,12);
+          ctx.fillStyle = "#c0a0e0"; ctx.fillRect(-2,-6,6,10);   // pattern
+          ctx.restore();
+          ctx.save(); ctx.rotate(0.08);
+          ctx.fillStyle = "#2a1840"; ctx.fillRect(-4,-8,10,14);  // middle card
+          ctx.fillStyle = "#7850a0"; ctx.fillRect(-3,-7,8,12);
+          ctx.fillStyle = "#f0e0ff"; ctx.fillRect(-2,-6,6,10);
+          ctx.fillStyle = "#9060c0"; ctx.font="4px serif"; ctx.textAlign="center";
+          ctx.fillText("★",0,1); ctx.textAlign="left";
+          ctx.restore();
+
         } else {
           // Fallback — colored square for unrecognized items
           ctx.fillStyle = itemColors[it.name] || "#888"; ctx.fillRect(-6, -6, 12, 12);
@@ -3401,7 +3779,7 @@
         ctx.restore();
 
         // --- Item-specific status indicators (no generic on/off dot) ---
-        if ((it.name === "Ghost Book" || it.name === "Journal") && it.written) { // purple dot = evidence written
+        if (it.name === "Ghost Book" && it.written) { // purple dot = evidence written
           ctx.fillStyle = it.writeAnimTimer > 0 ? "#c060ff" : "#8040c0";
           ctx.beginPath(); ctx.arc(it.x + 11, it.y + 1, 2, 0, Math.PI*2); ctx.fill();
         }
@@ -3660,16 +4038,6 @@
             ctx.beginPath();ctx.moveTo(1,rl);ctx.lineTo(5,rl);ctx.stroke();
           }
 
-        } else if (heldName === "Journal") {
-          // Closed leather journal held in hand
-          ctx.fillStyle = "#7a5030"; ctx.fillRect(-7,-7,14,12);       // cover
-          ctx.fillStyle = "#9a6840"; ctx.fillRect(-6,-6,12,10);       // cover highlight
-          ctx.fillStyle = "#5a3818"; ctx.fillRect(-2,-7,2,12);        // spine
-          ctx.fillStyle = "#c8a060";
-          ctx.fillRect(4,-7,2,2);     // top clasp
-          ctx.fillRect(4, 3,2,2);     // bottom clasp
-          ctx.fillStyle = "#e8dcc0"; ctx.fillRect(6,-5,1,8);          // page edge
-
         } else if (heldName === "Incense") {
           // Unlit: bare sticks.  Burning (TODO): ember tips + smoke
           const incenseOn = heldItemOn;
@@ -3719,6 +4087,84 @@
           ctx.fillStyle = "#c0c0b8"; ctx.fillRect(-5,-1,10,4);       // label band
           ctx.fillStyle = "#404040"; ctx.font="4px monospace"; ctx.textAlign="center";
           ctx.fillText("Rx",0,2.5); ctx.textAlign="left";
+
+        } else if (heldName === "Music Box") {
+          ctx.fillStyle = "#6a3060"; ctx.fillRect(-5,-4,11,8);
+          ctx.fillStyle = "#8a4080"; ctx.fillRect(-4,-3,9,5);
+          ctx.fillStyle = "#c080a0"; ctx.fillRect(-4,-4,9,2);     // lid trim
+          ctx.fillStyle = "#e8d0c0"; ctx.fillRect(-2,-2,5,3);     // felt interior
+          ctx.fillStyle = "#d0a830"; ctx.fillRect(4,-1,2,1);      // key base
+          ctx.fillStyle = "#e8c040"; ctx.beginPath(); ctx.arc(7,0,2,0,Math.PI*2); ctx.fill();
+
+        } else if (heldName === "Ouija Board") {
+          ctx.fillStyle = "#7a5820"; ctx.fillRect(-8,-5,16,10);
+          ctx.fillStyle = "#9a7030"; ctx.fillRect(-7,-4,14,8);
+          ctx.strokeStyle = "#c8a060"; ctx.lineWidth = 0.5;
+          ctx.beginPath(); ctx.arc(0,-1,4,Math.PI,0); ctx.stroke();
+          ctx.fillStyle = "#c8a060"; ctx.font = "2px monospace"; ctx.textAlign="center";
+          ctx.fillText("YES",-4,2); ctx.fillText("NO",4,2); ctx.textAlign="left";
+          // planchette
+          ctx.fillStyle = "#e8c880"; ctx.beginPath();
+          ctx.moveTo(0,-4); ctx.lineTo(-2,0); ctx.lineTo(2,0); ctx.closePath(); ctx.fill();
+
+        } else if (heldName === "Voodoo Doll") {
+          ctx.fillStyle = "#8a6850"; ctx.fillRect(-3,-10,7,14);
+          ctx.fillStyle = "#a07860"; ctx.fillRect(-2,-9,5,12);
+          ctx.fillStyle = "#8a6850"; ctx.beginPath(); ctx.arc(0.5,-12,3.5,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle = "#a07860"; ctx.beginPath(); ctx.arc(0.5,-12,2.5,0,Math.PI*2); ctx.fill();
+          ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.7;
+          ctx.beginPath(); ctx.moveTo(-1,-13); ctx.lineTo(0,-12); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0,-13); ctx.lineTo(-1,-12); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(2,-13); ctx.lineTo(3,-12); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(3,-13); ctx.lineTo(2,-12); ctx.stroke();
+          ctx.strokeStyle = "#c0c0c0"; ctx.lineWidth = 0.7;
+          ctx.beginPath(); ctx.moveTo(4,-4); ctx.lineTo(8,-4); ctx.stroke();
+          ctx.fillStyle = "#e0e0e0"; ctx.beginPath(); ctx.arc(8,-4,1.2,0,Math.PI*2); ctx.fill();
+
+        } else if (heldName === "Haunted Mirror") {
+          ctx.fillStyle = "#4a5060"; ctx.beginPath(); ctx.ellipse(0,0,6,8,0,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle = "#607090"; ctx.beginPath(); ctx.ellipse(0,0,5,7,0,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle = "#141218"; ctx.beginPath(); ctx.ellipse(0,0,4,6,0,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle = "rgba(150,180,255,0.2)"; ctx.beginPath(); ctx.ellipse(-0.5,-0.5,3,4,0,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle = "rgba(220,230,255,0.15)"; ctx.fillRect(-2,-5,1,10);
+
+        } else if (heldName === "Summoning Circle") {
+          // Rolled parchment held in hand
+          ctx.fillStyle = "#c0b080"; ctx.fillRect(-5,-8,10,16);
+          ctx.fillStyle = "#d8c890"; ctx.fillRect(-4,-7,8,14);
+          ctx.strokeStyle = "#9a7a40"; ctx.lineWidth = 0.6;
+          ctx.beginPath(); ctx.arc(0,0,4,0,Math.PI*2); ctx.stroke();
+          ctx.beginPath(); ctx.arc(0,0,2,0,Math.PI*2); ctx.stroke();
+          ctx.fillStyle = "rgba(160,20,20,0.5)"; ctx.beginPath(); ctx.arc(0,0,1.2,0,Math.PI*2); ctx.fill();
+          // scroll end caps
+          ctx.fillStyle = "#b0a070"; ctx.fillRect(-5,-8,10,2); ctx.fillRect(-5,6,10,2);
+
+        } else if (heldName === "Monkey Paw") {
+          ctx.fillStyle = "#5a3820"; ctx.fillRect(-4,-6,9,12);
+          ctx.fillStyle = "#7a5030"; ctx.fillRect(-3,-5,7,10);
+          ctx.strokeStyle = "#5a3820"; ctx.lineWidth = 1.8; ctx.lineCap = "round";
+          ctx.beginPath(); ctx.moveTo(-2,-5); ctx.quadraticCurveTo(-5,-9,-3,-11); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo( 1,-5); ctx.quadraticCurveTo( 1,-10,3,-11); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo( 4,-5); ctx.quadraticCurveTo( 7,-8,5,-11); ctx.stroke();
+          ctx.lineCap = "butt";
+          ctx.fillStyle = "#c0a070";
+          ctx.beginPath(); ctx.arc(-3,-11,1.2,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc( 3,-11,1.2,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc( 5,-11,1.2,0,Math.PI*2); ctx.fill();
+
+        } else if (heldName === "Tarot Cards") {
+          ctx.save(); ctx.rotate(-0.15);
+          ctx.fillStyle = "#2a1840"; ctx.fillRect(-4,-8,9,13);
+          ctx.fillStyle = "#7850a0"; ctx.fillRect(-3,-7,7,11);
+          ctx.fillStyle = "#c0a0e0"; ctx.fillRect(-2,-6,5,9);
+          ctx.restore();
+          ctx.save(); ctx.rotate(0.1);
+          ctx.fillStyle = "#2a1840"; ctx.fillRect(-4,-8,9,13);
+          ctx.fillStyle = "#7850a0"; ctx.fillRect(-3,-7,7,11);
+          ctx.fillStyle = "#f0e0ff"; ctx.fillRect(-2,-6,5,9);
+          ctx.fillStyle = "#9060c0"; ctx.font="5px serif"; ctx.textAlign="center";
+          ctx.fillText("★",0,1); ctx.textAlign="left";
+          ctx.restore();
 
         } else {
           ctx.fillStyle = itemColors[heldName] || "#aaa"; ctx.fillRect(-3,-9,5,10);
@@ -3846,6 +4292,82 @@
           for (let sy = -12; sy <= 10; sy += 3) {
             ctx.fillRect(-9, sy, 18, 1);
           }
+
+          ctx.restore();
+        }
+      }
+
+      // --- Summoning Circle ghost manifestation ---
+      if (currentGhost && summoningCircleTimer > 0) {
+        const sc = worldItems.find(it => it.name === "Summoning Circle" && it.fixed);
+        if (sc) {
+          const scCX = sc.x + 6, scCY = sc.y + 6;
+          // Fade in first 0.3s, hold, fade out last 0.6s
+          const fadeIn  = Math.min(1, (3 - summoningCircleTimer) / 0.3);
+          const fadeOut = Math.min(1, summoningCircleTimer / 0.6);
+          const alpha   = Math.min(fadeIn, fadeOut);
+
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.translate(scCX, scCY);
+          // Ghost faces player for dramatic effect
+          const angToPlayer = Math.atan2((player.y + 8) - scCY, (player.x + 8) - scCX);
+          ctx.rotate(angToPlayer + Math.PI / 2);
+
+          // Eerie red-orange glow behind the figure (circle light)
+          const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, 28);
+          glow.addColorStop(0, "rgba(200,60,0,0.35)");
+          glow.addColorStop(1, "rgba(150,0,0,0)");
+          ctx.fillStyle = glow;
+          ctx.beginPath(); ctx.arc(0, 0, 28, 0, Math.PI*2); ctx.fill();
+
+          // Shadow
+          ctx.fillStyle = "rgba(40,0,0,0.3)";
+          ctx.beginPath(); ctx.ellipse(1, 2, 9, 5, 0, 0, Math.PI*2); ctx.fill();
+
+          // Legs — dark rotted cloth
+          ctx.fillStyle = "#1c1410";
+          ctx.fillRect(-4, 3, 3, 6); ctx.fillRect(1, 3, 3, 6);
+          ctx.fillStyle = "#3a2820"; // bare feet
+          ctx.fillRect(-4, 8, 3, 2); ctx.fillRect(1, 8, 3, 2);
+
+          // Arms — limp at sides
+          ctx.fillStyle = "#1c1a18";
+          ctx.fillRect(-8, -1, 3, 8); ctx.fillRect(5, -1, 3, 8);
+          ctx.fillStyle = "#b0a898"; // pale hands
+          ctx.fillRect(-8, 6, 3, 2); ctx.fillRect(5, 6, 3, 2);
+
+          // Body — pale grey-green
+          ctx.fillStyle = "#2a2820";
+          ctx.fillRect(-5, -5, 10, 9);
+          ctx.fillStyle = "#201e1c"; ctx.fillRect(-5, -5, 10, 3); // shoulders
+          ctx.fillStyle = "#181614"; ctx.fillRect(-1, -5, 2, 9);  // stripe
+
+          // Rot stain
+          ctx.fillStyle = "rgba(80,20,0,0.5)";
+          ctx.beginPath(); ctx.arc(-1, -1, 2.5, 0, Math.PI*2); ctx.fill();
+
+          // Head — pale grey-green corpse skin
+          ctx.fillStyle = "#b8c8b0";
+          ctx.beginPath(); ctx.ellipse(0, -8, 4.5, 4, 0, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = "#181410"; // dark hair
+          ctx.beginPath(); ctx.ellipse(0, -10, 4.5, 2.5, 0, Math.PI, 0); ctx.fill();
+          ctx.fillStyle = "#a0afa0"; // ears
+          ctx.fillRect(-6, -9, 2, 3); ctx.fillRect(4, -9, 2, 3);
+
+          // Eye sockets — dark hollows, grey-white iris glow
+          ctx.fillStyle = "#050402";
+          ctx.beginPath(); ctx.ellipse(-1.5, -8.5, 2.0, 1.5, 0, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse( 1.5, -8.5, 2.0, 1.5, 0, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = "rgba(220,210,180,0.75)"; // grey iris — not green, this is the real form
+          ctx.beginPath(); ctx.arc(-1.5, -8.5, 0.7, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc( 1.5, -8.5, 0.7, 0, Math.PI*2); ctx.fill();
+
+          // Sunken cheeks + forehead gash
+          ctx.fillStyle = "rgba(20,5,0,0.55)";
+          ctx.fillRect(-4, -7, 2, 2); ctx.fillRect(2, -7, 2, 2);
+          ctx.fillStyle = "#5a1008";
+          ctx.fillRect(-1, -11, 2, 1); // forehead gash
 
           ctx.restore();
         }
@@ -4095,7 +4617,7 @@
 
       // Placement preview HUD hint
       if (placementPreview.active) {
-        const isJournalPrev = placementPreview.item === "Journal" || placementPreview.item === "Ghost Book";
+        const isJournalPrev = placementPreview.item === "Ghost Book";
         ctx.save();
         ctx.font = "bold 13px monospace";
         ctx.textAlign = "center";
@@ -4104,7 +4626,7 @@
         if (placementPreview.valid) {
           if (isJournalPrev) {
             ctx.fillStyle = "#80ffb0";
-            ctx.fillText("release V to place journal open", 400, 289);
+            ctx.fillText("release V to place ghost book open", 400, 289);
             ctx.font = "9px monospace"; ctx.fillStyle = "#5090c0";
             ctx.fillText("aim mouse to rotate", 400, 304);
           } else {
@@ -4212,7 +4734,7 @@
       const ik = keybinds.interact.toUpperCase(); // live interact key label
       // World item pickup prompt
       const pcx2 = player.x + player.width / 2, pcy2 = player.y + player.height / 2;
-      const nearWI = worldItems.find(it => Math.hypot(it.x + 6 - pcx2, it.y + 6 - pcy2) < 30);
+      const nearWI = worldItems.find(it => !it.fixed && Math.hypot(it.x + 6 - pcx2, it.y + 6 - pcy2) < 30);
       if (nearWI) {
         let promptText, promptColor;
         if (nearWI.name === "Tripod") {
@@ -4239,105 +4761,94 @@
         ctx.fillStyle = promptColor;
         ctx.fillText(promptText, 400, 540);
       }
-      const nd = nearDoor();
-      if (nd) {
-        ctx.fillStyle = "#e8c97a";
-        ctx.fillText(`Press ${ik} to ${nd.open ? "close" : "open"} door`, 400, 555);
-      }
-      if (nearVanDoor()) {
-        ctx.fillStyle = "#e8c97a";
-        ctx.fillText(`Press ${ik} to ${vanDoor.open ? "close" : "open"} the van`, 400, 555);
-      }
       if (nearKeypad()) {
         ctx.fillStyle = "#e8c97a";
         ctx.fillText(`${ik} — van controls  ★ ` + playerGuess, 400, 540);
       }
-      if (nearPegboard()) {
-        ctx.fillStyle = "#e8c97a";
-        ctx.fillText(`Press ${ik} to open equipment van`, 400, 540);
-      }
-      if (nearCCTV()) {
-        const _nc = getPlacedCameras().length;
-        ctx.fillStyle = "#e8c97a";
-        ctx.fillText(_nc > 0 ? `${ik} — view cameras  (${_nc} placed)` : `${ik} — camera station  (no cameras placed)`, 400, 555);
-      }
-      if (nearDangerTimer()) {
-        ctx.fillStyle = "#e8c97a";
-        ctx.fillText(`${ik} — threat monitor`, 400, 555);
-      }
-      if (nearFourPanel()) {
-        ctx.fillStyle = "#e8c97a";
-        ctx.fillText(`${ik} — open monitor panel`, 400, 555);
-      }
-      if (nearCorkBoard()) {
-        ctx.fillStyle = "#e8c97a";
-        ctx.fillText(`${ik} — cork board`, 400, 555);
-      }
-      const swHud = nearSwitch();
-      if (swHud >= 0) {
-        ctx.fillStyle = "#e8c97a";
-        ctx.fillText(`Press ${ik} to turn light ${roomLights[swHud].on ? "off" : "on"}`, 400, 555);
-      }
       ctx.textAlign = "left";
 
-      // Inventory HUD — bottom center
-      ctx.font = "10px monospace";
-      const slotSize = 36, slotPad = 4;
-      const slotTotalW = 4 * slotSize + 3 * slotPad; // 4 slots
-      const hudX = Math.floor((canvas.width - slotTotalW) / 2);
-      const hudY = canvas.height - 50;
-      for (let s = 0; s < 3; s++) {
-        const sx = hudX + s * (slotSize + slotPad);
-        const isSelected = s === selectedSlot;
-        ctx.fillStyle = isSelected ? "#2a2a1a" : "#111";
-        ctx.fillRect(sx, hudY, slotSize, slotSize);
-        ctx.strokeStyle = isSelected ? "#e8c97a" : "#444";
-        ctx.lineWidth = isSelected ? 2 : 1;
-        ctx.strokeRect(sx, hudY, slotSize, slotSize);
-        if (inventory[s]) {
-          ctx.fillStyle = itemColors[inventory[s]] || "#aaa";
-          ctx.fillRect(sx + 4, hudY + 4, slotSize - 8, slotSize - 16);
-          ctx.fillStyle = isSelected ? "#e8c97a" : "#888";
-          ctx.fillText(inventory[s].split(" ")[0].slice(0, 5), sx + 2, hudY + slotSize - 2);
+      // ── Inventory arc HUD ────────────────────────────────────────────────────
+      // Items arc across the bottom-center; selected item sits lowest and largest,
+      // adjacent items rise slightly and shrink — wheel / curved-selector feel.
+      {
+        const lighterSelected = hasLighter && selectedSlot >= inventory.length;
+        const total = inventory.length + (hasLighter ? 1 : 0);
+        const ARC_SPACING = 54;
+        const SEL_R = 24, BASE_R = 15;
+        const arcCX = canvas.width / 2;
+        const arcBaseY = canvas.height - 30; // y-center of the selected slot
+        const totalW = (total - 1) * ARC_SPACING;
+        const startX = arcCX - totalW / 2;
+
+        for (let s = 0; s < total; s++) {
+          const isLighterSlot = s === inventory.length && hasLighter;
+          const itemName = isLighterSlot ? "Lighter" : inventory[s];
+          if (!itemName) continue;
+
+          const isSel = s === selectedSlot;
+          const dist = Math.abs(s - selectedSlot);
+          const cx = startX + s * ARC_SPACING;
+          const cy = arcBaseY - dist * 8;        // arc: each step away rises 8px
+          const r  = Math.max(BASE_R, SEL_R - dist * 4);
+          const alpha = isSel ? 1.0 : Math.max(0.38, 1 - dist * 0.28);
+
+          ctx.save();
+          ctx.globalAlpha = alpha;
+
+          // Outer glow for selected
+          if (isSel) {
+            const glow = ctx.createRadialGradient(cx, cy, r, cx, cy, r + 12);
+            glow.addColorStop(0, "rgba(232,201,122,0.38)");
+            glow.addColorStop(1, "rgba(232,201,122,0)");
+            ctx.fillStyle = glow;
+            ctx.beginPath(); ctx.arc(cx, cy, r + 12, 0, Math.PI * 2); ctx.fill();
+          }
+
+          // Backing disc
+          ctx.fillStyle = isSel ? "rgba(28,26,18,0.88)" : "rgba(12,12,10,0.72)";
+          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+
+          // Ring border
+          ctx.strokeStyle = isSel ? "#e8c97a" : (isLighterSlot ? "#e87820" : "rgba(110,95,55,0.55)");
+          ctx.lineWidth = isSel ? 1.8 : 1;
+          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+
+          // Item art — clipped inside the disc
+          ctx.save();
+          ctx.beginPath(); ctx.arc(cx, cy, r - 1, 0, Math.PI * 2); ctx.clip();
+          ctx.translate(cx, cy);
+          const iconScale = r / 13;
+          ctx.scale(iconScale, iconScale);
+          _drawHUDIcon(ctx, itemName);
+          ctx.restore();
+
+          ctx.restore();
         }
-      }
-      // Lighter slot (always 4th)
-      const lighterSlotX = hudX + 3 * (slotSize + slotPad);
-      const lighterSelected = hasLighter && selectedSlot >= inventory.length;
-      ctx.fillStyle = lighterSelected ? "#2a1800" : "#111";
-      ctx.fillRect(lighterSlotX, hudY, slotSize, slotSize);
-      ctx.strokeStyle = lighterSelected ? "#fff" : (hasLighter ? "#e87820" : "#333");
-      ctx.lineWidth = lighterSelected ? 2 : 1;
-      ctx.strokeRect(lighterSlotX, hudY, slotSize, slotSize);
-      if (hasLighter) {
-        ctx.fillStyle = "#e87820";
-        ctx.fillRect(lighterSlotX + 4, hudY + 4, slotSize - 8, slotSize - 16);
-        ctx.fillStyle = "#e87820";
-        ctx.fillText("Lgtr", lighterSlotX + 2, hudY + slotSize - 2);
-      }
 
-      // Stamina bar — above inventory, visible when not full
-      if (stamina < STAMINA_MAX - 0.05) {
-        const barW = slotTotalW, barH = 4;
-        const barX = hudX, barY = hudY - 10;
-        const frac = stamina / STAMINA_MAX;
-        ctx.fillStyle = "#222";
-        ctx.fillRect(barX, barY, barW, barH);
-        ctx.fillStyle = frac > 0.4 ? "#5af" : (frac > 0.15 ? "#fa5" : "#f44");
-        ctx.fillRect(barX, barY, Math.round(barW * frac), barH);
-      }
+        // Stamina bar — thin strip above the arc
+        if (stamina < STAMINA_MAX - 0.05) {
+          const barW = Math.max(60, totalW + SEL_R * 2);
+          const barH = 3, barX = arcCX - barW / 2, barY = arcBaseY - SEL_R - 14;
+          const frac = stamina / STAMINA_MAX;
+          ctx.fillStyle = "rgba(30,30,30,0.7)"; ctx.fillRect(barX, barY, barW, barH);
+          ctx.fillStyle = frac > 0.4 ? "#5af" : (frac > 0.15 ? "#fa5" : "#f44");
+          ctx.fillRect(barX, barY, Math.round(barW * frac), barH);
+        }
 
-      // Selected item name — centered above the loadout
-      const heldLabelName = inventory[selectedSlot] || (lighterSelected ? "Lighter" : null);
-      if (heldLabelName) {
-        ctx.fillStyle = "#aaa";
-        ctx.font = "11px monospace";
-        const suffix = heldLabelName === "Flashlight"    ? (flashlightOn    ? " [ON]" : " [OFF]") :
-                       heldLabelName === "UV Flashlight" ? (uvFlashlightOn  ? " [ON]" : " [OFF]") :
-                       heldLabelName === "Lighter"       ? (lighterLit      ? " [LIT]" : "")      : "";
-        ctx.textAlign = "center";
-        ctx.fillText(heldLabelName + suffix, canvas.width / 2, hudY - 6);
-        ctx.textAlign = "left";
+        // Selected item name — floating above the arc, small and clean
+        const heldLabelName = inventory[selectedSlot] || (lighterSelected ? "Lighter" : null);
+        if (heldLabelName) {
+          const suffix = heldLabelName === "Flashlight"    ? (flashlightOn    ? " [ON]"  : " [OFF]") :
+                         heldLabelName === "UV Flashlight" ? (uvFlashlightOn  ? " [ON]"  : " [OFF]") :
+                         heldLabelName === "Lighter"       ? (lighterLit      ? " [LIT]" : "")       : "";
+          ctx.font = "10px monospace";
+          ctx.textAlign = "center";
+          ctx.fillStyle = "rgba(0,0,0,0.55)";
+          ctx.fillText(heldLabelName + suffix, arcCX + 1, arcBaseY - SEL_R - 18);
+          ctx.fillStyle = "#d4b86a";
+          ctx.fillText(heldLabelName + suffix, arcCX, arcBaseY - SEL_R - 19);
+          ctx.textAlign = "left";
+        }
       }
 
       // --- Enlarged held-item display (screen-fixed, bottom-right, no panel box) ---
@@ -4478,6 +4989,75 @@
             ctx.fillStyle = "rgba(255,160,0,0.95)"; ctx.beginPath(); ctx.arc(0.5,-9,3.5,0,Math.PI*2); ctx.fill();
             ctx.fillStyle = "rgba(255,255,80,0.9)";  ctx.beginPath(); ctx.arc(0.5,-11,1.8,0,Math.PI*2); ctx.fill();
             ctx.fillStyle = "rgba(255,200,40,0.3)";  ctx.beginPath(); ctx.arc(0.5,-9,6,0,Math.PI*2);   ctx.fill();
+          }
+        } else if (heldForDisplay === "Music Box") {
+          // ornate box with brass key
+          ctx.fillStyle = "#5a2878"; ctx.fillRect(-7,-6,14,11);
+          ctx.fillStyle = "#7a3898"; ctx.fillRect(-6,-5,12,9);
+          ctx.strokeStyle = "#c8a030"; ctx.lineWidth=0.8;
+          ctx.strokeRect(-7,-6,14,11);
+          for(let xi=-4;xi<=4;xi+=4){ctx.beginPath();ctx.moveTo(xi,-6);ctx.lineTo(xi,5);ctx.stroke();}
+          ctx.fillStyle = "#c8a030"; ctx.beginPath(); ctx.arc(0,-6,2,Math.PI,0); ctx.fill(); // lid knob
+          ctx.fillStyle = "#e0c050"; ctx.beginPath(); ctx.arc(0,-6,1.2,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle = "#c8a030"; ctx.fillRect(5,-2,4,2); ctx.fillRect(8,-3,2,4); // key
+        } else if (heldForDisplay === "Ouija Board") {
+          ctx.fillStyle = "#3a200a"; ctx.fillRect(-8,-7,16,13);
+          ctx.fillStyle = "#5a3010"; ctx.fillRect(-7,-6,14,11);
+          ctx.strokeStyle = "#c89030"; ctx.lineWidth=0.7; ctx.strokeRect(-7,-6,14,11);
+          ctx.fillStyle = "#e8c060"; ctx.font="4px serif"; ctx.textAlign="center";
+          ctx.fillText("YES",-3,-2); ctx.fillText("NO",4,-2);
+          ctx.fillStyle="#c89030"; ctx.font="3px serif";
+          ctx.fillText("ABCDE",0,2); ctx.fillText("12345",0,6);
+          ctx.textAlign="left";
+        } else if (heldForDisplay === "Voodoo Doll") {
+          // burlap doll shape
+          ctx.fillStyle = "#8a6840"; ctx.beginPath(); ctx.arc(0,-7,3.5,0,Math.PI*2); ctx.fill(); // head
+          ctx.fillStyle = "#7a5830"; ctx.fillRect(-3,-4,6,9); // body
+          ctx.fillStyle = "#8a6840"; ctx.fillRect(-5,-3,2,5); ctx.fillRect(3,-3,2,5); // arms
+          ctx.fillStyle = "#7a5830"; ctx.fillRect(-2,5,2,5); ctx.fillRect(0,5,2,5); // legs
+          ctx.strokeStyle = "#c03020"; ctx.lineWidth=0.8;
+          ctx.beginPath();ctx.moveTo(-1,-8);ctx.lineTo(2,2);ctx.stroke(); // pin
+          ctx.fillStyle="#c03020"; ctx.beginPath();ctx.arc(-1,-8,1.2,0,Math.PI*2);ctx.fill();
+        } else if (heldForDisplay === "Haunted Mirror") {
+          ctx.fillStyle = "#483020"; ctx.fillRect(-6,-9,12,17); // wood frame
+          ctx.fillStyle = "#705040"; ctx.fillRect(-5,-8,10,15);
+          ctx.fillStyle = "#b0c8d8"; ctx.fillRect(-4,-7,8,12); // glass
+          ctx.fillStyle = "rgba(180,210,230,0.5)"; ctx.fillRect(-3,-6,3,5); // reflection
+          ctx.strokeStyle = "#c03020"; ctx.lineWidth=0.6;
+          ctx.beginPath();ctx.moveTo(-4,-7);ctx.lineTo(4,5);ctx.stroke(); // crack
+          ctx.beginPath();ctx.moveTo(0,-7);ctx.lineTo(-2,2);ctx.stroke();
+          ctx.strokeStyle = "#705040"; ctx.lineWidth=1.2; ctx.strokeRect(-6,-9,12,17);
+        } else if (heldForDisplay === "Summoning Circle") {
+          ctx.strokeStyle = "#c03020"; ctx.lineWidth=1;
+          ctx.beginPath(); ctx.arc(0,0,8,0,Math.PI*2); ctx.stroke();
+          ctx.beginPath(); ctx.arc(0,0,6,0,Math.PI*2); ctx.stroke();
+          // pentagram
+          const pts=[]; for(let pi=0;pi<5;pi++){const a=pi*Math.PI*2/5-Math.PI/2; pts.push([Math.cos(a)*6,Math.sin(a)*6]);}
+          ctx.beginPath(); [0,2,4,1,3].forEach((idx,j)=>{ j===0?ctx.moveTo(pts[idx][0],pts[idx][1]):ctx.lineTo(pts[idx][0],pts[idx][1]); }); ctx.closePath(); ctx.stroke();
+          ctx.fillStyle="rgba(180,0,0,0.3)"; ctx.fill();
+        } else if (heldForDisplay === "Monkey Paw") {
+          // withered paw
+          ctx.fillStyle = "#5a3818"; ctx.fillRect(-3,0,6,7); // palm
+          ctx.strokeStyle = "#4a2808"; ctx.lineWidth=2;
+          // 5 curled fingers
+          const fpx=[-4,-2,0,2,4];
+          fpx.forEach((fx,fi)=>{
+            ctx.beginPath();ctx.moveTo(fx,0);
+            ctx.quadraticCurveTo(fx-1,-4+(fi%2)*2,fx+(fi<2?-2:2),-7+(fi%3));
+            ctx.stroke();
+          });
+          ctx.fillStyle="#3a2010"; ctx.beginPath();ctx.arc(0,7,3,0,Math.PI); ctx.fill(); // wrist knob
+        } else if (heldForDisplay === "Tarot Cards") {
+          // fanned card deck
+          for(let ci=2;ci>=0;ci--){
+            const ang=(ci-1)*0.18;
+            ctx.save(); ctx.rotate(ang);
+            ctx.fillStyle = "#1a0828"; ctx.fillRect(-4,-8,8,12);
+            ctx.fillStyle = "#2a1840"; ctx.fillRect(-3,-7,6,10);
+            ctx.strokeStyle = "#9030c0"; ctx.lineWidth=0.5; ctx.strokeRect(-3,-7,6,10);
+            ctx.fillStyle="#c060e8"; ctx.font="4px serif"; ctx.textAlign="center";
+            ctx.fillText("★",0,0); ctx.textAlign="left";
+            ctx.restore();
           }
         } else {
           ctx.fillStyle = itemColors[heldForDisplay] || "#aaa"; ctx.fillRect(-4,-8,8,12);
@@ -4688,8 +5268,8 @@
     // --- Equipment Screen (van pegboard, view-only) ---
     // qty = how many are currently in the van; 0 = empty slot (item was used / not restocked)
     const equipmentList = [
-      // Derived from the master ITEMS registry — qty starts at pegQty and decreases as items are taken
-      ...ITEMS.map(it => ({ name: it.name, qty: it.pegQty, desc: it.desc })),
+      // Derived from master ITEMS registry — cursed items excluded (they spawn in the house, not here)
+      ...ITEMS.filter(it => it.category !== "cursed").map(it => ({ name: it.name, qty: it.pegQty, desc: it.desc })),
     ];
 
     function drawEquipment() {
@@ -5384,7 +5964,7 @@
           { key:"sprint",     label:"Sprint"      },
           { key:"interact",   label:"Interact"    },
           { key:"flashlight", label:"Flashlight"  },
-          { key:"journal",    label:"Journal"     },
+          { key:"journal",    label:"Evid. Journal"},
           { key:"drop",       label:"Drop Item"   },
           { key:"place",      label:"Place Item"  },
           { key:"inventory",  label:"Cycle Inv."  },
@@ -5616,6 +6196,7 @@
         style === "bed"     ? "#352d48" :  // bed — soft purple
         style === "counter" ? "#2d3130" :  // counter/appliance — cool stone
         style === "seat"    ? "#3d2f1e" :  // seating — warm fabric
+        style === "car"     ? "#1e2c38" :  // car — dark steel blue
                               "#483820";   // wood storage (default)
       furniture.forEach(f => {
         ctx.fillStyle = _furnitureFill(f.style);
