@@ -14,7 +14,9 @@
     canvas {
       display: block;
       background: #111;
-      position: absolute;
+      /* fixed keeps centering relative to the viewport, not the document body.
+         On iOS this prevents the canvas from drifting behind the browser toolbar. */
+      position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
@@ -87,8 +89,24 @@
       const vw = (window.visualViewport ? window.visualViewport.width  : window.innerWidth);
       const vh = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
       const scale = Math.min(vw / 800, vh / 600);
-      canvas.style.width  = Math.round(800 * scale) + "px";
-      canvas.style.height = Math.round(600 * scale) + "px";
+      const cw = Math.round(800 * scale);
+      const ch = Math.round(600 * scale);
+      canvas.style.width  = cw + "px";
+      canvas.style.height = ch + "px";
+
+      if (isMobile) {
+        // On mobile, bypass the CSS top:50%/left:50% rules and pin the canvas
+        // explicitly to the center of the *visual* viewport.
+        // visualViewport.offsetTop/Left gives the visual-viewport origin relative to
+        // the layout viewport — accounts for keyboard, toolbar, and any scroll offset.
+        const offTop  = window.visualViewport ? window.visualViewport.offsetTop  : 0;
+        const offLeft = window.visualViewport ? window.visualViewport.offsetLeft : 0;
+        canvas.style.top       = Math.round(offTop  + (vh - ch) / 2) + "px";
+        canvas.style.left      = Math.round(offLeft + (vw - cw) / 2) + "px";
+        canvas.style.transform = "none";
+      }
+      // (desktop keeps the CSS default: top:50%; left:50%; transform:translate(-50%,-50%))
+
       // Show/hide landscape prompt on mobile portrait
       const lp = document.getElementById("landscapePrompt");
       if (lp) {
@@ -1695,6 +1713,21 @@
         _resetJoy(); _resetLook(); _resetPinch();
         mobileSprinting = false; mobileSprintId = null;
       }, { passive: false });
+
+      // ── Out-of-canvas tap-to-close ─────────────────────────────────────────
+      // When letterbox bars exist (black area around the canvas) a touch there
+      // hits the document body, never reaching the canvas touchstart handler.
+      // This catches those touches and closes any open overlay panel.
+      document.addEventListener("touchstart", e => {
+        if (e.target === canvas) return; // canvas handles its own panel logic
+        if (!gameRunning) return;
+        if (journalOpen || equipmentOpen || keypadOpen ||
+            dangerTimerOpen || fourPanelOpen || corkBoardOpen) {
+          journalOpen = false; equipmentOpen = false; keypadOpen = false;
+          dangerTimerOpen = false; fourPanelOpen = false; corkBoardOpen = false;
+        }
+      }, { passive: true });
+
     } // end if (isMobile)
 
     // --- Update ---
