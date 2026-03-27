@@ -82,18 +82,24 @@
     // The internal resolution stays 800×600 — all game coordinates are unchanged.
     // Mouse handlers divide by this scale to map screen pixels back to logical canvas pixels.
     function resizeCanvas() {
-      const scale = Math.min(window.innerWidth / 800, window.innerHeight / 600);
+      // On mobile, window.innerHeight shrinks when the browser address bar is visible.
+      // visualViewport gives the true usable area (excludes browser chrome) when available.
+      const vw = (window.visualViewport ? window.visualViewport.width  : window.innerWidth);
+      const vh = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
+      const scale = Math.min(vw / 800, vh / 600);
       canvas.style.width  = Math.round(800 * scale) + "px";
       canvas.style.height = Math.round(600 * scale) + "px";
       // Show/hide landscape prompt on mobile portrait
       const lp = document.getElementById("landscapePrompt");
       if (lp) {
-        const isPortrait = window.innerWidth < window.innerHeight;
+        const isPortrait = vw < vh;
         lp.style.display = (isMobile && isPortrait) ? "flex" : "none";
       }
     }
     resizeCanvas();
     window.addEventListener("resize", resizeCanvas);
+    // visualViewport fires its own resize when mobile browser chrome shows/hides
+    if (window.visualViewport) window.visualViewport.addEventListener("resize", resizeCanvas);
 
     // ── Mobile input state ───────────────────────────────────────────────────
     // Virtual joystick (left thumb zone)
@@ -130,6 +136,31 @@
       flashlight:{ cx: 655, cy: 36,  r: 18 },               // F — flashlight
       drop:      { cx: 600, cy: 36,  r: 16 },               // G — drop / place item
     };
+
+    // ── Mobile UI settings ───────────────────────────────────────────────────
+    // Scale multipliers applied to MOB base radii when drawing and hit-testing.
+    // Stored separately from desktop controls so they never interfere.
+    const MOBILE_STORAGE_KEY = "ghost_game_mobile_v1";
+    let mobJoyScale  = 1.0;  // joystick ring+knob radius scale  (0.6 – 1.6, step 0.1)
+    let mobBtnScale  = 1.0;  // action button radius scale        (0.6 – 1.6, step 0.1)
+    let mobOpacity   = 0.6;  // overall control overlay opacity   (0.3 – 1.0, step 0.1)
+
+    function saveMobileSettings() {
+      if (!isMobile) return;
+      localStorage.setItem(MOBILE_STORAGE_KEY, JSON.stringify({ mobJoyScale, mobBtnScale, mobOpacity }));
+    }
+    function loadMobileSettings() {
+      if (!isMobile) return;
+      try {
+        const raw = localStorage.getItem(MOBILE_STORAGE_KEY);
+        if (!raw) return;
+        const s = JSON.parse(raw);
+        if (typeof s.mobJoyScale  === "number") mobJoyScale  = Math.max(0.6, Math.min(1.6, s.mobJoyScale));
+        if (typeof s.mobBtnScale  === "number") mobBtnScale  = Math.max(0.6, Math.min(1.6, s.mobBtnScale));
+        if (typeof s.mobOpacity   === "number") mobOpacity   = Math.max(0.3, Math.min(1.0, s.mobOpacity));
+      } catch (_) { /* corrupt — silently ignore */ }
+    }
+    loadMobileSettings();
 
     // Offscreen fog canvas — darkness layer drawn here, then composited onto main canvas
     const fogCanvas = document.createElement("canvas");
@@ -1366,7 +1397,8 @@
         };
       }
 
-      function _hitBtn(tx, ty, btn) { return Math.hypot(tx - btn.cx, ty - btn.cy) <= btn.r; }
+      // Hit-test uses the same scale as draw so tap targets match visuals
+      function _hitBtn(tx, ty, btn) { return Math.hypot(tx - btn.cx, ty - btn.cy) <= btn.r * mobBtnScale; }
 
       // Dispatch a real keydown+keyup so all existing keyboard logic runs unchanged
       function _fireKey(key) {
@@ -1443,7 +1475,7 @@
             mobileSprinting = true; mobileSprintId = t.identifier; continue;
           }
 
-          // ── Joystick (left half, lower) ──
+          // ── Joystick (left half, lower) — capture zone scales with mobJoyScale ──
           if (x < 350 && y > 280 && !mobileJoy.active) {
             mobileJoy.active    = true;
             mobileJoy.id        = t.identifier;
@@ -1822,7 +1854,7 @@
         const jdx = mobileJoy.curX - mobileJoy.baseX;
         const jdy = mobileJoy.curY - mobileJoy.baseY;
         const jLen = Math.hypot(jdx, jdy);
-        const deadR = MOB.joy.deadR, maxR = MOB.joy.maxR;
+        const deadR = MOB.joy.deadR * mobJoyScale, maxR = MOB.joy.maxR * mobJoyScale;
         if (jLen > deadR) {
           mobileJoy.angle     = Math.atan2(jdy, jdx);
           mobileJoy.magnitude = Math.min((jLen - deadR) / (maxR - deadR), 1.0);
@@ -3891,31 +3923,54 @@
             }
           });
         }
-        // Options tab (tab 2) — sensitivity buttons and keybind rows
+        // Options tab (tab 2) — left page differs by platform; right page keybinds shared
         if (journalTab === 2) {
-          // Sensitivity [-] and [+] buttons (left page)
-          const sbx = lx + 70, sby = jy + 106;
-          if (mx >= sbx && mx <= sbx + 22 && my >= sby && my <= sby + 22) {
-            sensitivity = Math.max(0.5, +(sensitivity - 0.1).toFixed(1));
-            saveControls();
+          if (isMobile) {
+            // ── Mobile: Joystick Size, Button Size, Opacity [-/+] buttons ──
+            // Row positions match drawJournal _mobSetting calls exactly
+            // (labelY, my2 = labelY+6, buttons at mx2=lx+60 and mx2+66)
+            const mx2 = lx + 60;
+            const rows = [
+              { labelY: jy + 72,  get: () => mobJoyScale, set: v => { mobJoyScale = +Math.max(0.6, Math.min(1.6, v)).toFixed(1); } },
+              { labelY: jy + 142, get: () => mobBtnScale, set: v => { mobBtnScale = +Math.max(0.6, Math.min(1.6, v)).toFixed(1); } },
+              { labelY: jy + 212, get: () => mobOpacity,  set: v => { mobOpacity  = +Math.max(0.3, Math.min(1.0, v)).toFixed(1); } },
+            ];
+            const step = [0.1, 0.1, 0.1];
+            rows.forEach((row, i) => {
+              const my2 = row.labelY + 6;
+              if (my >= my2 && my <= my2 + 20) {
+                if (mx >= mx2      && mx <= mx2 + 20) { row.set(row.get() - step[i]); saveMobileSettings(); }
+                if (mx >= mx2 + 66 && mx <= mx2 + 86) { row.set(row.get() + step[i]); saveMobileSettings(); }
+              }
+            });
+            // Reset mobile defaults button (y: jy+268, w:140)
+            if (mx >= lx + 14 && mx <= lx + 154 && my >= jy + 268 && my <= jy + 290) {
+              mobJoyScale = 1.0; mobBtnScale = 1.0; mobOpacity = 0.6;
+              saveMobileSettings();
+            }
+          } else {
+            // ── Desktop: Sensitivity [-] [+] buttons (left page) ──
+            const sbx = lx + 70, sby = jy + 106;
+            if (mx >= sbx && mx <= sbx + 22 && my >= sby && my <= sby + 22) {
+              sensitivity = Math.max(0.5, +(sensitivity - 0.1).toFixed(1)); saveControls();
+            }
+            if (mx >= sbx + 80 && mx <= sbx + 102 && my >= sby && my <= sby + 22) {
+              sensitivity = Math.min(2.0, +(sensitivity + 0.1).toFixed(1)); saveControls();
+            }
+            // Reset to defaults button
+            const resetBtnX = lx + 14, resetBtnY = jy + 260;
+            if (mx >= resetBtnX && mx <= resetBtnX + 120 && my >= resetBtnY && my <= resetBtnY + 22) {
+              keybinds = { ...KEYBIND_DEFAULTS };
+              sensitivity = 1.0;
+              saveControls();
+            }
           }
-          if (mx >= sbx + 80 && mx <= sbx + 102 && my >= sby && my <= sby + 22) {
-            sensitivity = Math.min(2.0, +(sensitivity + 0.1).toFixed(1));
-            saveControls();
-          }
-          // Reset to defaults button
-          const resetBtnX = lx + 14, resetBtnY = jy + 260;
-          if (mx >= resetBtnX && mx <= resetBtnX + 120 && my >= resetBtnY && my <= resetBtnY + 22) {
-            keybinds = { ...KEYBIND_DEFAULTS };
-            sensitivity = 1.0;
-            saveControls();
-          }
-          // Keybind rows (right page) — click row to start rebinding
+          // ── Right page: keybind rows — shared for both platforms ──
           const actions = ["up","down","left","right","sprint","interact","flashlight","journal","drop","inventory","use"];
           actions.forEach((action, i) => {
             const bry = jy + 70 + i * 30;
             if (mx >= rx + 14 && mx <= rx + rw - 14 && my >= bry && my <= bry + 24) {
-              rebindingAction = (rebindingAction === action) ? null : action; // toggle off if already active
+              rebindingAction = (rebindingAction === action) ? null : action;
             }
           });
           return;
@@ -4419,7 +4474,8 @@
       ctx.closePath(); ctx.fill();
 
       // ── Page titles ───────────────────────────────────────────────────────
-      const leftTitle  = journalTab === 0 ? "Evidence" : journalTab === 1 ? "Ghost List" : "Settings";
+      const leftTitle  = journalTab === 0 ? "Evidence" : journalTab === 1 ? "Ghost List"
+                       : (isMobile ? "Mobile Setup" : "Settings");
       const rightTitle = journalTab === 0 ? "Suspects" : journalTab === 1 ? playerGuess : "Key Bindings";
       ctx.font = "italic bold 13px Georgia, serif"; ctx.textAlign = "center";
       ctx.fillStyle = "#2a1a08";
@@ -4573,56 +4629,107 @@
       }
 
       // =====================================================
-      // TAB 2 — Left page: Settings  |  Right page: Key Bindings
+      // TAB 2 — Left page: Settings / Mobile Setup  |  Right page: Key Bindings
       // =====================================================
       if (journalTab === 2) {
-        // ── Left page: flashlight sensitivity ──
-        ctx.fillStyle = "#3a2810"; ctx.font = "italic bold 11px Georgia, serif"; ctx.textAlign = "left";
-        ctx.fillText("Flashlight Sensitivity", lx + 14, jy + 74);
-        ctx.fillStyle = "#5a4020"; ctx.font = "10px Georgia, serif";
-        ctx.fillText("How quickly your flashlight tracks the cursor.", lx + 14, jy + 90);
 
-        // [-] value [+] controls
-        const sbx = lx + 70, sby = jy + 106;
-        ctx.fillStyle = "#c8b890"; ctx.fillRect(sbx, sby, 22, 22);
-        ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(sbx, sby, 22, 22);
-        ctx.fillStyle = "#2a1a08"; ctx.font = "bold 14px Georgia, serif"; ctx.textAlign = "center";
-        ctx.fillText("−", sbx + 11, sby + 16);
+        // ── Left page: MOBILE shows control size/opacity sliders ──────────
+        if (isMobile) {
+          // Helper: draw a [-] value [+] row and bar for a mobile setting
+          // Returns the y bottom edge so rows can stack cleanly
+          function _mobSetting(label, value, minV, maxV, barY, labelY) {
+            ctx.fillStyle = "#3a2810"; ctx.font = "italic bold 10px Georgia, serif"; ctx.textAlign = "left";
+            ctx.fillText(label, lx + 14, labelY);
+            const mx2 = lx + 60, my2 = labelY + 6;
+            // [−] button
+            ctx.fillStyle = "#c8b890"; ctx.fillRect(mx2, my2, 20, 20);
+            ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(mx2, my2, 20, 20);
+            ctx.fillStyle = "#2a1a08"; ctx.font = "bold 13px Georgia, serif"; ctx.textAlign = "center";
+            ctx.fillText("−", mx2 + 10, my2 + 14);
+            // value text
+            ctx.fillStyle = "#2a1a08"; ctx.font = "bold 11px Georgia, serif";
+            ctx.fillText(value.toFixed(1), mx2 + 38, my2 + 13);
+            // [+] button
+            ctx.fillStyle = "#c8b890"; ctx.fillRect(mx2 + 66, my2, 20, 20);
+            ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(mx2 + 66, my2, 20, 20);
+            ctx.fillStyle = "#2a1a08"; ctx.font = "bold 13px Georgia, serif";
+            ctx.fillText("+", mx2 + 76, my2 + 14);
+            // bar
+            const bw = lw - 50, bh = 7;
+            ctx.fillStyle = "#d0c4a8"; ctx.fillRect(lx + 14, barY, bw, bh);
+            ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(lx + 14, barY, bw, bh);
+            const frac = (value - minV) / (maxV - minV);
+            ctx.fillStyle = "#8a6a30"; ctx.fillRect(lx + 14, barY, frac * bw, bh);
+            ctx.textAlign = "left";
+          }
 
-        ctx.fillStyle = "#2a1a08"; ctx.font = "bold 13px Georgia, serif";
-        ctx.fillText(sensitivity.toFixed(1) + "×", sbx + 42, sby + 15);
+          ctx.fillStyle = "#5a3a18"; ctx.font = "italic 9px Georgia, serif"; ctx.textAlign = "left";
+          ctx.fillText("Tap [−] / [+] to resize controls", lx + 14, jy + 48);
 
-        ctx.fillStyle = "#c8b890"; ctx.fillRect(sbx + 80, sby, 22, 22);
-        ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(sbx + 80, sby, 22, 22);
-        ctx.fillStyle = "#2a1a08"; ctx.font = "bold 14px Georgia, serif";
-        ctx.fillText("+", sbx + 91, sby + 16);
+          _mobSetting("Joystick Size",  mobJoyScale, 0.6, 1.6, jy + 82,  jy + 72);
+          _mobSetting("Button Size",    mobBtnScale, 0.6, 1.6, jy + 152, jy + 142);
+          _mobSetting("Opacity",        mobOpacity,  0.3, 1.0, jy + 222, jy + 212);
 
-        // Sensitivity bar
-        const barX = lx + 14, barY = sby + 34, barW = lw - 40, barH = 10;
-        ctx.fillStyle = "#d0c4a8"; ctx.fillRect(barX, barY, barW, barH);
-        ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(barX, barY, barW, barH);
-        const fill = ((sensitivity - 0.5) / 1.5) * barW;
-        ctx.fillStyle = "#8a6a30"; ctx.fillRect(barX, barY, fill, barH);
-        ctx.fillStyle = "#5a4020"; ctx.font = "italic 9px Georgia, serif"; ctx.textAlign = "left";
-        ctx.fillText("sluggish", barX, barY + 22);
-        ctx.textAlign = "right";
-        ctx.fillText("instant", barX + barW, barY + 22);
+          // Reset mobile defaults button
+          const resetMobX = lx + 14, resetMobY = jy + 268;
+          ctx.fillStyle = "#c8b890"; ctx.fillRect(resetMobX, resetMobY, 140, 22);
+          ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(resetMobX, resetMobY, 140, 22);
+          ctx.fillStyle = "#3a1808"; ctx.font = "bold 9px Georgia, serif"; ctx.textAlign = "center";
+          ctx.fillText("Reset Mobile Defaults", resetMobX + 70, resetMobY + 14);
+          ctx.textAlign = "left";
 
-        ctx.fillStyle = "#5a4020"; ctx.font = "italic 9px Georgia, serif"; ctx.textAlign = "left";
-        ctx.fillText("Low = slow, atmospheric tracking.", lx + 14, jy + 190);
-        ctx.fillText("High = flashlight snaps to cursor immediately.", lx + 14, jy + 204);
-        ctx.fillText("Default: 1.0", lx + 14, jy + 222);
+          ctx.fillStyle = "#5a4020"; ctx.font = "italic 9px Georgia, serif";
+          ctx.fillText("Left side = joystick", lx + 14, jy + 320);
+          ctx.fillText("Right side = buttons (E R ⚡ J Q F G)", lx + 14, jy + 334);
+          ctx.fillText("Drag anywhere else to rotate facing.", lx + 14, jy + 352);
+          ctx.fillText("Two-finger pinch = zoom in/out.", lx + 14, jy + 366);
 
-        // Reset to defaults button
-        const resetBtnX = lx + 14, resetBtnY = jy + 260;
-        ctx.fillStyle = "#c8b890"; ctx.fillRect(resetBtnX, resetBtnY, 120, 22);
-        ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(resetBtnX, resetBtnY, 120, 22);
-        ctx.fillStyle = "#3a1808"; ctx.font = "bold 9px Georgia, serif"; ctx.textAlign = "center";
-        ctx.fillText("Reset to Defaults", resetBtnX + 60, resetBtnY + 14);
-        ctx.textAlign = "left";
+        } else {
+          // ── Left page: DESKTOP shows flashlight sensitivity ───────────────
+          ctx.fillStyle = "#3a2810"; ctx.font = "italic bold 11px Georgia, serif"; ctx.textAlign = "left";
+          ctx.fillText("Flashlight Sensitivity", lx + 14, jy + 74);
+          ctx.fillStyle = "#5a4020"; ctx.font = "10px Georgia, serif";
+          ctx.fillText("How quickly your flashlight tracks the cursor.", lx + 14, jy + 90);
 
-        ctx.fillStyle = "#5a4020"; ctx.font = "italic 9px Georgia, serif";
-        ctx.fillText("Arrow keys always work regardless of rebinding.", lx + 14, jy + 380);
+          const sbx = lx + 70, sby = jy + 106;
+          ctx.fillStyle = "#c8b890"; ctx.fillRect(sbx, sby, 22, 22);
+          ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(sbx, sby, 22, 22);
+          ctx.fillStyle = "#2a1a08"; ctx.font = "bold 14px Georgia, serif"; ctx.textAlign = "center";
+          ctx.fillText("−", sbx + 11, sby + 16);
+
+          ctx.fillStyle = "#2a1a08"; ctx.font = "bold 13px Georgia, serif";
+          ctx.fillText(sensitivity.toFixed(1) + "×", sbx + 42, sby + 15);
+
+          ctx.fillStyle = "#c8b890"; ctx.fillRect(sbx + 80, sby, 22, 22);
+          ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(sbx + 80, sby, 22, 22);
+          ctx.fillStyle = "#2a1a08"; ctx.font = "bold 14px Georgia, serif";
+          ctx.fillText("+", sbx + 91, sby + 16);
+
+          const barX = lx + 14, barY = sby + 34, barW = lw - 40, barH = 10;
+          ctx.fillStyle = "#d0c4a8"; ctx.fillRect(barX, barY, barW, barH);
+          ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(barX, barY, barW, barH);
+          const fill = ((sensitivity - 0.5) / 1.5) * barW;
+          ctx.fillStyle = "#8a6a30"; ctx.fillRect(barX, barY, fill, barH);
+          ctx.fillStyle = "#5a4020"; ctx.font = "italic 9px Georgia, serif"; ctx.textAlign = "left";
+          ctx.fillText("sluggish", barX, barY + 22);
+          ctx.textAlign = "right";
+          ctx.fillText("instant", barX + barW, barY + 22);
+
+          ctx.fillStyle = "#5a4020"; ctx.font = "italic 9px Georgia, serif"; ctx.textAlign = "left";
+          ctx.fillText("Low = slow, atmospheric tracking.", lx + 14, jy + 190);
+          ctx.fillText("High = flashlight snaps to cursor immediately.", lx + 14, jy + 204);
+          ctx.fillText("Default: 1.0", lx + 14, jy + 222);
+
+          const resetBtnX = lx + 14, resetBtnY = jy + 260;
+          ctx.fillStyle = "#c8b890"; ctx.fillRect(resetBtnX, resetBtnY, 120, 22);
+          ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(resetBtnX, resetBtnY, 120, 22);
+          ctx.fillStyle = "#3a1808"; ctx.font = "bold 9px Georgia, serif"; ctx.textAlign = "center";
+          ctx.fillText("Reset to Defaults", resetBtnX + 60, resetBtnY + 14);
+          ctx.textAlign = "left";
+
+          ctx.fillStyle = "#5a4020"; ctx.font = "italic 9px Georgia, serif";
+          ctx.fillText("Arrow keys always work regardless of rebinding.", lx + 14, jy + 380);
+        }
 
         // ── Right page: keybindings ──
         const actionDefs = [
@@ -5599,18 +5706,19 @@
 
       ctx.save();
 
-      // Helper: draw a single round button
+      // Helper: draw a single round button — radius scaled by mobBtnScale, opacity by mobOpacity
       function _drawBtn(btn, label, color, active) {
-        const alpha = active ? 0.85 : 0.50;
-        ctx.globalAlpha = alpha;
+        const r = btn.r * mobBtnScale;
+        const baseAlpha = active ? Math.min(1, mobOpacity * 1.4) : mobOpacity;
+        ctx.globalAlpha = baseAlpha;
         ctx.fillStyle = active ? color : "rgba(0,0,0,0.6)";
-        ctx.beginPath(); ctx.arc(btn.cx, btn.cy, btn.r, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(btn.cx, btn.cy, r, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = color;
         ctx.lineWidth = active ? 2.5 : 1.5;
-        ctx.beginPath(); ctx.arc(btn.cx, btn.cy, btn.r, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(btn.cx, btn.cy, r, 0, Math.PI * 2); ctx.stroke();
         ctx.globalAlpha = 1;
         ctx.fillStyle = active ? "#000" : color;
-        const fs = Math.max(9, Math.floor(btn.r * 0.52));
+        const fs = Math.max(9, Math.floor(r * 0.52));
         ctx.font = `bold ${fs}px monospace`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -5618,53 +5726,52 @@
         ctx.textBaseline = "alphabetic";
       }
 
-      // ── Virtual joystick ──────────────────────────────────────────────────
-      const jb = MOB.joy;
-      // Base circle (floating at wherever the finger touched down)
-      const baseX = mobileJoy.active ? mobileJoy.baseX : jb.cx;
-      const baseY = mobileJoy.active ? mobileJoy.baseY : jb.cy;
+      // ── Virtual joystick (radii scaled by mobJoyScale, opacity by mobOpacity) ──
+      const jb  = MOB.joy;
+      const jMaxR  = jb.maxR  * mobJoyScale;
+      const jDeadR = jb.deadR * mobJoyScale;
+      const jKnobR = 22       * mobJoyScale;
+      const baseX  = mobileJoy.active ? mobileJoy.baseX : jb.cx;
+      const baseY  = mobileJoy.active ? mobileJoy.baseY : jb.cy;
 
-      ctx.globalAlpha = mobileJoy.active ? 0.45 : 0.25;
+      ctx.globalAlpha = (mobileJoy.active ? 0.45 : 0.25) * mobOpacity;
       ctx.strokeStyle = "#e8c97a"; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(baseX, baseY, jb.maxR, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(baseX, baseY, jMaxR, 0, Math.PI * 2); ctx.stroke();
 
-      // Inner dead-zone ring
-      ctx.globalAlpha = 0.15;
+      ctx.globalAlpha = 0.15 * mobOpacity;
       ctx.strokeStyle = "#e8c97a"; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.arc(baseX, baseY, jb.deadR, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(baseX, baseY, jDeadR, 0, Math.PI * 2); ctx.stroke();
 
-      // Knob — clamped to maxR
       let knobX = baseX, knobY = baseY;
       if (mobileJoy.active) {
         const jdx = mobileJoy.curX - mobileJoy.baseX;
         const jdy = mobileJoy.curY - mobileJoy.baseY;
         const jLen = Math.hypot(jdx, jdy);
         if (jLen > 0) {
-          const clamp = Math.min(jLen, jb.maxR);
+          const clamp = Math.min(jLen, jMaxR);
           knobX = baseX + (jdx / jLen) * clamp;
           knobY = baseY + (jdy / jLen) * clamp;
         }
       }
-      ctx.globalAlpha = mobileJoy.active ? 0.75 : 0.35;
+      ctx.globalAlpha = (mobileJoy.active ? 0.75 : 0.35) * mobOpacity;
       ctx.fillStyle = "#e8c97a";
-      ctx.beginPath(); ctx.arc(knobX, knobY, 22, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(knobX, knobY, jKnobR, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 1;
 
       // ── Action buttons ────────────────────────────────────────────────────
-      const heldName = inventory[selectedSlot] || (hasLighter ? "Lighter" : null);
+      const heldName   = inventory[selectedSlot] || (hasLighter ? "Lighter" : null);
       const flashActive = (heldName === "Flashlight" && flashlightOn) || (heldName === "UV Flashlight" && uvFlashlightOn);
 
-      _drawBtn(MOB.interact,   "E",  "#e8c97a", false);
-      _drawBtn(MOB.use,        "R",  "#80c8a0", heldItemOn || heldItemUsing);
-      _drawBtn(MOB.sprint,     "\u26A1", "#ff9040", mobileSprinting);
-      _drawBtn(MOB.journal,    "J",  "#a0b0e8", journalOpen);
-      _drawBtn(MOB.cycleItem,  "Q",  "#d0c080", false);
-      _drawBtn(MOB.flashlight, "F",  "#f0d060", flashActive);
-      _drawBtn(MOB.drop,       "G",  "#c08060", false);
+      _drawBtn(MOB.interact,   "E",       "#e8c97a", false);
+      _drawBtn(MOB.use,        "R",       "#80c8a0", heldItemOn || heldItemUsing);
+      _drawBtn(MOB.sprint,     "\u26A1",  "#ff9040", mobileSprinting);
+      _drawBtn(MOB.journal,    "J",       "#a0b0e8", journalOpen);
+      _drawBtn(MOB.cycleItem,  "Q",       "#d0c080", false);
+      _drawBtn(MOB.flashlight, "F",       "#f0d060", flashActive);
+      _drawBtn(MOB.drop,       "G",       "#c08060", false);
 
-      // Tiny look-zone reminder (fades in only when not looking)
       if (!mobileLook.active && !mobileJoy.active) {
-        ctx.globalAlpha = 0.18;
+        ctx.globalAlpha = 0.18 * mobOpacity;
         ctx.fillStyle = "#e8c97a";
         ctx.font = "9px monospace";
         ctx.textAlign = "center";
