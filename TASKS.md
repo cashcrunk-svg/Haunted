@@ -117,6 +117,7 @@
 - [x] Ghost roster system: GHOST_REGISTRY (27 ghosts), GHOST_CONFIG flags, GHOST_BEHAVIOR_DEFAULTS, ghostSpecialState, selectGhostForRound(), setupGhostSpecialState(), ghostLog(); normal roster live; Ultimate Ghost disabled
 - [x] Ghost Orbs: camera-only floating orbs (4 per round); drift+bounce inside ghost's room; flicker alpha; visible only in handheld camera view and CCTV feed; ORB badge notification in both viewfinder and CCTV chrome when orb in cone
 - [x] Ghost behavior from type: getGhostBehavior() wired to movement speed, event rate, roam tendency; specialRules enforced (dots_camera_only, no_room_migration); Goryo DOTS only visible through held camera viewfinder
+- [x] Journal placement fix: Journal on van pegboard (not auto-equipped); tap G = instant drop closed; hold G (≥250ms) = placement preview; J during preview toggles OPEN/CLOSED state; active=open, inactive=closed; ghost writes in placed open journal; heavy ink scrawls + bleed tint for written state
 - [ ] Ghost hunt mode (chases player, causes lose condition)
 - [ ] Tilemap / multi-room map
 

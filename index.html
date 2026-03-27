@@ -277,7 +277,7 @@
     let sensitivity  = 1.0;  // movement speed multiplier (0.5–2.0)
 
     // ── Controls: defaults + persistence ────────────────────────────────────
-    const KEYBIND_DEFAULTS = { up:"w", down:"s", left:"a", right:"d", interact:"e", flashlight:"f", journal:"j", drop:"g", inventory:"q", sprint:"shift", use:"r" };
+    const KEYBIND_DEFAULTS = { up:"w", down:"s", left:"a", right:"d", interact:"e", flashlight:"f", journal:"j", drop:"g", place:"v", inventory:"q", sprint:"shift", use:"r" };
     const CONTROLS_STORAGE_KEY = "ghost_game_controls_v1";
 
     function saveControls() {
@@ -321,29 +321,37 @@
     //   "UV Flashlight" = UV Light
     //   "Lighter"       = Igniter
     const ITEMS = [
-      // ── Starter items ──────────────────────────────────────────────────────
-      { name:"Flashlight",           category:"starter",  color:"#f0d060", pegQty:2, directional:false, desc:"Standard light source — take one before entering" },
-      { name:"EMF Reader",           category:"starter",  color:"#4a8ab0", pegQty:2, directional:false, desc:"Detects electromagnetic fields near ghost activity" },
-      { name:"Spirit Box",           category:"starter",  color:"#8a6a40", pegQty:1, directional:false, desc:"Captures ghost voice responses at radio freq" },
-      { name:"UV Flashlight",        category:"starter",  color:"#c0c0ff", pegQty:2, directional:false, desc:"Reveals fingerprints and footprints" },
-      { name:"Ghost Book",           category:"starter",  color:"#d4c8a0", pegQty:3, directional:false, desc:"Left out for the ghost to write in" },
+      // ── Wall order: column-first, top→bottom then right to next column ──────
+      // Col 1
       { name:"Video Camera",         category:"starter",  color:"#484848", pegQty:2, directional:true,  desc:"Spots orbs floating in dark rooms" },
-      { name:"Thermometer",          category:"starter",  color:"#c8c8c8", pegQty:1, directional:false, desc:"Freezing temps indicate ghost presence" },
-      { name:"Sound Recorder",       category:"starter",  color:"#505050", pegQty:2, directional:true,  desc:"Records EVP — ghost voices on playback" },
-      { name:"D.O.T.S. Projector",   category:"starter",  color:"#40c070", pegQty:2, directional:true,  desc:"Projects a field of dots — ghost disturbs them" },
-      // ── Optional items ─────────────────────────────────────────────────────
       { name:"Tripod",               category:"optional", color:"#808060", pegQty:1, directional:true,  desc:"Mounts a Video Camera hands-free" },
-      { name:"Sanity Meds",          category:"optional", color:"#e0e0d8", pegQty:4, directional:false, desc:"Slows sanity drain; take before entering" },
+      { name:"Photo Camera",         category:"optional", color:"#505050", pegQty:0, directional:true,  desc:"Captures ghost evidence photos" },
+      // Col 2
+      { name:"Flashlight",           category:"starter",  color:"#f0d060", pegQty:2, directional:false, desc:"Standard light source — take one before entering" },
+      { name:"UV Flashlight",        category:"starter",  color:"#c0c0ff", pegQty:2, directional:false, desc:"Reveals fingerprints and footprints" },
+      { name:"Salt",                 category:"optional", color:"#e8e8e0", pegQty:0, directional:false, desc:"Reveals ghost footprints when walked through" },
+      // Col 3
+      { name:"EMF Reader",           category:"starter",  color:"#4a8ab0", pegQty:2, directional:false, desc:"Detects electromagnetic fields near ghost activity" },
+      { name:"Thermometer",          category:"starter",  color:"#c8c8c8", pegQty:1, directional:false, desc:"Freezing temps indicate ghost presence" },
+      { name:"D.O.T.S. Projector",   category:"starter",  color:"#40c070", pegQty:2, directional:true,  desc:"Projects a field of dots — ghost disturbs them" },
+      // Col 4
+      { name:"Ghost Book",           category:"starter",  color:"#d4c8a0", pegQty:3, directional:false, desc:"Left out for the ghost to write in" },
+      { name:"Spirit Box",           category:"starter",  color:"#8a6a40", pegQty:1, directional:false, desc:"Captures ghost voice responses at radio freq" },
       { name:"Lighter",              category:"optional", color:"#c8a820", pegQty:2, directional:false, desc:"Lights candles and incense sticks" },
+      // Col 5
+      { name:"Firelight",            category:"optional", color:"#e08030", pegQty:0, directional:false, desc:"Deployable candle — warm close-range light" },
       { name:"Incense",              category:"optional", color:"#c8a060", pegQty:3, directional:false, desc:"Repels ghost temporarily when lit" },
       { name:"Crucifix",             category:"optional", color:"#d0a830", pegQty:2, directional:false, desc:"Prevents ghost from hunting nearby" },
-      { name:"Firelight",            category:"optional", color:"#e08030", pegQty:0, directional:false, desc:"Deployable candle — warm close-range light" },
-      { name:"Head Gear",            category:"optional", color:"#405a30", pegQty:0, directional:false, desc:"Night vision headset — see in total darkness" },
-      { name:"Motion Sensor",        category:"optional", color:"#6a6a6a", pegQty:0, directional:true,  desc:"Detects movement in a monitored room" },
-      { name:"Parabolic Microphone", category:"optional", color:"#707070", pegQty:0, directional:true,  desc:"Amplifies distant sounds through walls" },
-      { name:"Photo Camera",         category:"optional", color:"#505050", pegQty:0, directional:true,  desc:"Captures ghost evidence photos" },
-      { name:"Salt",                 category:"optional", color:"#e8e8e0", pegQty:0, directional:false, desc:"Reveals ghost footprints when walked through" },
+      // Col 6
+      { name:"Sanity Meds",          category:"optional", color:"#e0e0d8", pegQty:4, directional:false, desc:"Slows sanity drain; take before entering" },
       { name:"Sound Sensor",         category:"optional", color:"#606060", pegQty:0, directional:false, desc:"Monitors room audio level from the van" },
+      { name:"Motion Sensor",        category:"optional", color:"#6a6a6a", pegQty:0, directional:true,  desc:"Detects movement in a monitored room" },
+      // Col 7
+      { name:"Head Gear",            category:"optional", color:"#405a30", pegQty:0, directional:false, desc:"Night vision headset — see in total darkness" },
+      { name:"Sound Recorder",       category:"starter",  color:"#505050", pegQty:2, directional:true,  desc:"Records EVP — ghost voices on playback" },
+      { name:"Journal",              category:"starter",  color:"#b89060", pegQty:1, directional:false, desc:"Evidence notebook — pick up from van, can be set down open or closed" },
+      // ── Remaining optional (stub slots, not in primary order) ──────────────
+      { name:"Parabolic Microphone", category:"optional", color:"#707070", pegQty:0, directional:true,  desc:"Amplifies distant sounds through walls" },
       // ── Cursed possessions ─────────────────────────────────────────────────
       { name:"Music Box",            category:"cursed",   color:"#8a6080", pegQty:0, directional:false, desc:"Plays a melody — attracts the ghost" },
       { name:"Ouija Board",          category:"cursed",   color:"#7a5820", pegQty:0, directional:false, desc:"Ask the ghost questions — at great risk" },
@@ -408,7 +416,7 @@
       safeTime           = SAFE_TIME;
       safeTimeOver       = false;
       lastTime           = performance.now();
-      inventory    = [];
+      inventory    = []; // journal is picked up from the van pegboard, not auto-equipped
       hasLighter   = false;
       selectedSlot = 0;
       flashlightOn = false;
@@ -446,14 +454,34 @@
     });
 
     // --- Shared interact action — called by keyboard E and desktop mouse click ---
+    // ── Shared interaction facing helper ─────────────────────────────────────
+    // Returns true if the target (tx, ty) is:
+    //   1. within `dist` px of the player center, AND
+    //   2. within INTERACT_HALF_ANGLE radians of playerAngle (player is facing it)
+    // Half-angle of ~50° means the target must sit inside a ~100° forward cone.
+    const INTERACT_HALF_ANGLE = 0.875; // ~50 degrees
+    function _isFacing(tx, ty, dist) {
+      const pcx = player.x + player.width  / 2;
+      const pcy = player.y + player.height / 2;
+      if (Math.hypot(tx - pcx, ty - pcy) > dist) return false;
+      const angleToTarget = Math.atan2(ty - pcy, tx - pcx);
+      let diff = angleToTarget - playerAngle;
+      // Normalise to [-π, π]
+      while (diff >  Math.PI) diff -= 2 * Math.PI;
+      while (diff < -Math.PI) diff += 2 * Math.PI;
+      return Math.abs(diff) <= INTERACT_HALF_ANGLE;
+    }
+
     // ── Keyboard E interaction path ───────────────────────────────────────────
-    // Uses player-proximity (near*) functions. Click/tap does NOT call this.
+    // Uses player-proximity + facing check. Click/tap does NOT call this.
     function doInteract() {
       if (!gameRunning) return;
       const pcx = player.x + player.width  / 2;
       const pcy = player.y + player.height / 2;
+
+      // World items — must be within 30px AND in front of the player
       const nearIdx = worldItems.findIndex(it =>
-        Math.hypot(it.x + 6 - pcx, it.y + 6 - pcy) < 30
+        _isFacing(it.x + 6, it.y + 6, 30)
       );
       if (nearIdx >= 0) {
         const it = worldItems[nearIdx];
@@ -479,26 +507,34 @@
           worldItems.splice(nearIdx, 1);
         }
       }
-      const nearD = nearDoor();
+
+      // Doors — within 40px AND facing
+      const nearD = doors.find(d => _isFacing(d.x + d.w / 2, d.y + d.h / 2, 40));
       if (nearD) {
         const playerInDoor = player.x + player.width  > nearD.x && player.x < nearD.x + nearD.w &&
                              player.y + player.height > nearD.y && player.y < nearD.y + nearD.h;
         if (nearD.open && playerInDoor) { /* blocked */ }
         else nearD.open = !nearD.open;
       }
-      if (nearVanDoor())     vanDoor.open = !vanDoor.open;
-      if (nearKeypad())      { keypadOpen = true; return; }
-      if (nearPegboard())    { equipmentOpen = true; pegScrollX = 0; return; }
-      if (nearCCTV())        {
+
+      // Van door — within 44px AND facing
+      if (_isFacing(360, 926, 44)) vanDoor.open = !vanDoor.open;
+
+      // Van fixed interactables — each within its reach radius AND facing
+      if (_isFacing(347, 900, 28)) { keypadOpen = true; return; }
+      if (_isFacing(270, 950, 40)) { equipmentOpen = true; pegScrollX = 0; return; }
+      if (_isFacing(196, 926, 32)) {
         cameraViewMode = true;
         const cams = getPlacedCameras();
         cameraViewIndex = Math.min(cameraViewIndex, Math.max(0, cams.length - 1));
         return;
       }
-      if (nearDangerTimer()) { dangerTimerOpen = true; return; }
-      if (nearFourPanel())   { fourPanelOpen   = true; return; }
-      if (nearCorkBoard())   { corkBoardOpen   = true; return; }
-      const swIdx = nearSwitch();
+      if (_isFacing(210, 900, 28)) { dangerTimerOpen = true; return; }
+      if (_isFacing(306, 900, 28)) { fourPanelOpen   = true; return; }
+      if (_isFacing(255, 898, 28)) { corkBoardOpen   = true; return; }
+
+      // Light switches — within 28px AND facing
+      const swIdx = roomLights.findIndex(s => _isFacing(s.x, s.y, 28));
       if (swIdx >= 0) roomLights[swIdx].on = !roomLights[swIdx].on;
     }
 
@@ -514,14 +550,15 @@
       const _ph = (ox, oy, r) => Math.hypot(wx - ox, wy - oy) < r;
       // _pp: player is close enough to object at (ox,oy) (reach gate — prevents long-range clicks)
       const _pp = (ox, oy, r) => Math.hypot(pcx - ox, pcy - oy) < r;
+      // _pf: player is actually facing object at (ox,oy) — uses same helper as keyboard path
+      const _pf = (ox, oy, dist) => _isFacing(ox, oy, dist);
 
-      // ── Doors — expanded-rect hit test (doors are thin; center-point would miss) ──
-      // Checked first so clicking a door near an item toggles the door, not the item.
+      // ── Doors — expanded-rect hit test + facing ───────────────────────────
       const hitDoor = doors.find(d => {
         const dcx = d.x + d.w / 2, dcy = d.y + d.h / 2;
         return wx >= d.x - 14 && wx <= d.x + d.w + 14 &&
                wy >= d.y - 14 && wy <= d.y + d.h + 14 &&
-               _pp(dcx, dcy, 55);
+               _pp(dcx, dcy, 55) && _pf(dcx, dcy, 55);
       });
       if (hitDoor) {
         const playerInDoor = player.x + player.width  > hitDoor.x && player.x < hitDoor.x + hitDoor.w &&
@@ -530,9 +567,9 @@
         return;
       }
 
-      // ── World items on the floor ──────────────────────────────────────────
+      // ── World items on the floor — pointer hit + reach + facing ──────────
       const hitItemIdx = worldItems.findIndex(it =>
-        _ph(it.x + 6, it.y + 6, 26) && _pp(it.x + 6, it.y + 6, 38)
+        _ph(it.x + 6, it.y + 6, 26) && _pp(it.x + 6, it.y + 6, 38) && _pf(it.x + 6, it.y + 6, 38)
       );
       if (hitItemIdx >= 0) {
         const it = worldItems[hitItemIdx];
@@ -560,30 +597,24 @@
         return;
       }
 
-      // ── Van rear door ─────────────────────────────────────────────────────
-      if (_ph(360, 926, 44) && _pp(360, 926, 56)) { vanDoor.open = !vanDoor.open; return; }
+      // ── Van rear door — pointer hit + reach + facing ──────────────────────
+      if (_ph(360, 926, 44) && _pp(360, 926, 56) && _pf(360, 926, 56)) { vanDoor.open = !vanDoor.open; return; }
 
-      // ── Van fixed interactables — each uses its own hit radius ────────────
-      // CCTV monitor screen (~38px radius matches its visual size)
-      if (_ph(196, 926, 38) && _pp(196, 926, 42)) {
+      // ── Van fixed interactables — pointer hit + reach + facing ────────────
+      if (_ph(196, 926, 38) && _pp(196, 926, 42) && _pf(196, 926, 42)) {
         cameraViewMode = true;
         const cams = getPlacedCameras();
         cameraViewIndex = Math.min(cameraViewIndex, Math.max(0, cams.length - 1));
         return;
       }
-      // Pegboard — widest object, generous radius
-      if (_ph(270, 950, 52) && _pp(270, 950, 52)) { equipmentOpen = true; pegScrollX = 0; return; }
-      // Keypad — small device
-      if (_ph(347, 900, 28) && _pp(347, 900, 36)) { keypadOpen = true; return; }
-      // Danger timer monitor
-      if (_ph(210, 900, 28) && _pp(210, 900, 36)) { dangerTimerOpen = true; return; }
-      // Four-panel monitor
-      if (_ph(306, 900, 28) && _pp(306, 900, 36)) { fourPanelOpen   = true; return; }
-      // Cork board
-      if (_ph(255, 898, 28) && _pp(255, 898, 36)) { corkBoardOpen   = true; return; }
+      if (_ph(270, 950, 52) && _pp(270, 950, 52) && _pf(270, 950, 52)) { equipmentOpen = true; pegScrollX = 0; return; }
+      if (_ph(347, 900, 28) && _pp(347, 900, 36) && _pf(347, 900, 36)) { keypadOpen = true; return; }
+      if (_ph(210, 900, 28) && _pp(210, 900, 36) && _pf(210, 900, 36)) { dangerTimerOpen = true; return; }
+      if (_ph(306, 900, 28) && _pp(306, 900, 36) && _pf(306, 900, 36)) { fourPanelOpen   = true; return; }
+      if (_ph(255, 898, 28) && _pp(255, 898, 36) && _pf(255, 898, 36)) { corkBoardOpen   = true; return; }
 
-      // ── Light switches — small precise targets ────────────────────────────
-      const hitSwIdx = roomLights.findIndex(s => _ph(s.x, s.y, 20) && _pp(s.x, s.y, 34));
+      // ── Light switches — pointer hit + reach + facing ─────────────────────
+      const hitSwIdx = roomLights.findIndex(s => _ph(s.x, s.y, 20) && _pp(s.x, s.y, 34) && _pf(s.x, s.y, 34));
       if (hitSwIdx >= 0) { roomLights[hitSwIdx].on = !roomLights[hitSwIdx].on; return; }
 
       // No valid target hit — do nothing.
@@ -614,32 +645,42 @@
           heldItemOn = false; heldItemUsing = false; // reset state on slot switch
         }
       }
-      if (e.key.toLowerCase() === keybinds.drop) {
+      if (e.key.toLowerCase() === keybinds.drop && !e.repeat) {
         if (gameRunning && inventory[selectedSlot]) {
           const name = inventory[selectedSlot];
-          if (name === "Video Camera") {
-            // Video Camera uses hold-G preview system — enter preview on keydown
+          // G = instant drop for ALL items including Journal and Camera.
+          // Journal drops closed/inactive. Camera drops at feet (no placement mode).
+          // Intentional placement is V (keybinds.place).
+          const px = player.x + player.width  / 2 + Math.cos(playerAngle) * 22 - 6;
+          const py = player.y + player.height / 2 + Math.sin(playerAngle) * 22 - 6;
+          const placedActive = name === "Flashlight"    ? flashlightOn
+                             : name === "UV Flashlight" ? uvFlashlightOn
+                             : name === "Journal"       ? false   // drop = always closed/inactive
+                             : heldItemOn;
+          const newItem = { name, x: px, y: py, facing: playerAngle, active: placedActive };
+          if (name === "Ghost Book" || name === "Journal") { newItem.written = false; newItem.writeAnimTimer = 0; }
+          if (name === "Tripod") { newItem.mountedCamera = null; }
+          worldItems.push(newItem);
+          inventory.splice(selectedSlot, 1);
+          if (selectedSlot >= inventory.length) selectedSlot = Math.max(0, inventory.length - 1);
+          if (name === "Flashlight")    flashlightOn   = false;
+          if (name === "UV Flashlight") uvFlashlightOn = false;
+          if (name === "Journal")       journalOpen    = false;
+          heldItemOn = false; heldItemUsing = false;
+        }
+      }
+
+      // V — intentional placement mode for Journal and Camera
+      if (e.key.toLowerCase() === keybinds.place && !e.repeat) {
+        if (gameRunning && inventory[selectedSlot]) {
+          const name = inventory[selectedSlot];
+          if (name === "Video Camera" || name === "Journal" || name === "Ghost Book") {
+            // V down = enter placement preview; V up = commit if valid, cancel if not.
+            // Journal: placed = open/active. Camera: placed = on surface/tripod.
             placementPreview.active            = true;
-            placementPreview.angle             = playerAngle; // start facing same as player
-            placementPreview.lockedPlayerAngle = playerAngle; // freeze player facing
-          } else {
-            // All other items: instant floor placement (existing behavior)
-            const px = player.x + player.width  / 2 + Math.cos(playerAngle) * 22 - 6;
-            const py = player.y + player.height / 2 + Math.sin(playerAngle) * 22 - 6;
-            // Capture the item's true on-state at the moment of placement.
-            // Flashlight/UV use their own state vars; everything else uses heldItemOn.
-            const placedActive = name === "Flashlight"    ? flashlightOn
-                               : name === "UV Flashlight" ? uvFlashlightOn
-                               : heldItemOn;
-            const newItem = { name, x: px, y: py, facing: playerAngle, active: placedActive };
-            if (name === "Ghost Book") { newItem.written = false; newItem.writeAnimTimer = 0; }
-            if (name === "Tripod")     { newItem.mountedCamera = null; }
-            worldItems.push(newItem);
-            inventory.splice(selectedSlot, 1);
-            if (selectedSlot >= inventory.length) selectedSlot = Math.max(0, inventory.length - 1);
-            if (name === "Flashlight")    flashlightOn   = false;
-            if (name === "UV Flashlight") uvFlashlightOn = false;
-            heldItemOn = false; heldItemUsing = false;
+            placementPreview.item              = name;
+            placementPreview.angle             = playerAngle;
+            placementPreview.lockedPlayerAngle = playerAngle;
           }
         }
       }
@@ -807,8 +848,12 @@
     // style: "wood" (default) | "bed" | "counter" | "seat"
     const furniture = [
       // ── Foyer (300,600 → 500,720) ─────────────────────────────────────────
-      { x:303, y:606, w:36, h:14, label:"Console Table", style:"wood"    }, // west wall — camera surface; clear of all doors
-      { x:303, y:650, w:28, h:14, label:"Bench",         style:"seat"    }, // west wall — entry seating
+      // Rug listed first so nightstand + cubby render on top of it
+      { x:347, y:627, w:106,h:62, label:"Rug",        style:"rug"    }, // bigger, centered (room center x:400,y:660)
+      { x:303, y:699, w:18, h:18, label:"Nightstand", style:"wood"   }, // bottom-left corner, flush both walls
+      { x:309, y:703, w:5,  h:4,  label:"Key Bowl",   style:"accent" }, // smaller key bowl centered on nightstand
+      { x:430, y:712, w:62, h:8,  label:"Shoe Cubby", style:"wood"   }, // thin+long, along bottom wall, right of front door
+      { x:452, y:712, w:16, h:6,  label:"Shoes",      style:"accent" }, // one pair on cubby — accent/tan contrasts wood
 
       // ── Living Room (360,80 → 560,460) ────────────────────────────────────
       { x:396, y:83,  w:84, h:15, label:"TV Stand",      style:"wood"    }, // north wall — camera surface
@@ -867,8 +912,9 @@
     // Placement preview state — used for Video Camera furniture/tripod placement
     // lockedPlayerAngle: player facing frozen while preview is active (Fix 3)
     // snapTarget: {type:"furniture"|"tripod", ref} — surface snapped to (Fix 1 & 2)
-    let placementPreview = { active: false, x: 0, y: 0, angle: 0, valid: false,
+    let placementPreview = { active: false, item: null, x: 0, y: 0, angle: 0, valid: false,
                              lockedPlayerAngle: 0, snapTarget: null };
+    // Journal placement: same flow as camera — G down = preview, G up = place if valid, cancel if not.
 
     // Doors — each sits at a doorway gap; closed doors block movement
     // x/y/w/h is the blocker rect centered on the wall
@@ -903,6 +949,10 @@
       { x:180, y:886, w:180, h:8  }, // north wall
       { x:180, y:958, w:180, h:8  }, // south wall
       { x:180, y:886, w:8,   h:80 }, // west wall (cab side)
+      // Interior equipment collision
+      { x:204, y:893, w:126, h:14 }, // north monitor shelf (threat monitor + cork board + four-panel + keypad)
+      { x:188, y:906, w:16,  h:40 }, // CCTV monitor on west wall
+      { x:204, y:948, w:142, h:10 }, // pegboard on south wall
     ];
 
     // Van rear door — starts closed; opens like a trailer ramp swinging east
@@ -976,10 +1026,12 @@
       on: true,
       x:  r.x + r.w - 7,  // flush against east wall (switch plate is 4px wide)
       y:  r.y + 18,        // slightly below the north wall, where a real switch sits
+      side: "east",
     }));
     // Foyer switch override: east wall default (x:493) conflicts with the Coat Closet
     // doorway opening (x:481, y:621). Move it to the west wall — no doors on that side.
-    roomLights[1].x = rooms[1].x + 7;  // 7px from west wall (x:300 → x:307)
+    roomLights[1].x = rooms[1].x + 3;  // 3px from west wall inner edge
+    roomLights[1].side = "west";
 
     function nearSwitch() {
       const cx = player.x + 8, cy = player.y + 8;
@@ -1526,7 +1578,7 @@
       keys[e.key] = false;
       keys[e.key.toLowerCase()] = false;
       // G released while Video Camera preview active — commit or cancel
-      if (e.key.toLowerCase() === keybinds.drop && placementPreview.active) {
+      if (e.key.toLowerCase() === keybinds.place && placementPreview.active) {
         if (placementPreview.valid && inventory[selectedSlot] === "Video Camera") {
           const snap = placementPreview.snapTarget;
           if (snap && snap.type === "tripod") {
@@ -1544,8 +1596,22 @@
           inventory.splice(selectedSlot, 1);
           if (selectedSlot >= inventory.length) selectedSlot = Math.max(0, inventory.length - 1);
           heldItemOn = false; heldItemUsing = false;
+        } else if (placementPreview.valid && (inventory[selectedSlot] === "Journal" || inventory[selectedSlot] === "Ghost Book")) {
+          // Same flow as camera: valid surface → place. No surface → cancel (stays in hand).
+          // Placed via this path = always open/active (ghost can write in it).
+          const bookName = inventory[selectedSlot];
+          const newItem = { name: bookName,
+                            x: placementPreview.x - 6, y: placementPreview.y - 6,
+                            facing: placementPreview.angle,
+                            active: true, written: false, writeAnimTimer: 0 };
+          worldItems.push(newItem);
+          inventory.splice(selectedSlot, 1);
+          if (selectedSlot >= inventory.length) selectedSlot = Math.max(0, inventory.length - 1);
+          heldItemOn = false; heldItemUsing = false;
+          journalOpen = false;
         }
         placementPreview.active    = false;
+        placementPreview.item      = null;
         placementPreview.snapTarget = null;
       }
     });
@@ -1987,7 +2053,7 @@
         if (dotsDisturbTimer > 0) dotsDisturbTimer -= delta;
         if (spiritBoxTimer   > 0) spiritBoxTimer   -= delta;
         for (const it of worldItems) {
-          if (it.name === "Ghost Book" && it.writeAnimTimer > 0) it.writeAnimTimer -= delta;
+          if ((it.name === "Ghost Book" || it.name === "Journal") && it.writeAnimTimer > 0) it.writeAnimTimer -= delta;
         }
 
         // Thermometer — distance-based target; slow mercury-style lerp
@@ -2108,10 +2174,11 @@
               }
             }
 
-            // Ghost Writing — active unwritten Ghost Book within 120px of ghost gets written
+            // Ghost Writing — active unwritten Ghost Book OR open placed Journal within 120px
             if (ev.includes("Ghost Writing")) {
               const book = worldItems.find(it =>
-                it.name === "Ghost Book" && it.active && !it.written &&
+                (it.name === "Ghost Book" || it.name === "Journal") &&
+                it.active && !it.written &&
                 Math.hypot(it.x + 6 - ghostX, it.y + 6 - ghostY) < 120
               );
               if (book) {
@@ -2185,36 +2252,49 @@
         });
       }
 
-      // Camera placement preview — snap position to surface, angle set by mouse
+      // Placement preview — snap position to surface, angle set by mouse
+      // Used by: Video Camera (furniture/tripod only), Journal (furniture OR floor)
       if (placementPreview.active) {
         const cx = player.x + 8, cy = player.y + 8;
         const probeX = cx + Math.cos(placementPreview.lockedPlayerAngle) * 30;
         const probeY = cy + Math.sin(placementPreview.lockedPlayerAngle) * 30;
+        const isJournal = placementPreview.item === "Journal" || placementPreview.item === "Ghost Book";
 
         // Check furniture surfaces — snap to center of matched rect
         const hitFurniture = furniture.find(f =>
           probeX >= f.x && probeX <= f.x + f.w &&
           probeY >= f.y && probeY <= f.y + f.h
         );
-        // Check tripod mounts — tripod without a camera already
-        const hitTripod = worldItems.find(it =>
+        // Check tripod mounts — tripod without a camera already (camera only)
+        const hitTripod = !isJournal && worldItems.find(it =>
           it.name === "Tripod" && !it.mountedCamera &&
           Math.hypot(probeX - (it.x + 6), probeY - (it.y + 6)) < 18
+        );
+        // Journal also accepts floor: player is standing in a room or doorway
+        const hitFloor = isJournal && (
+          rooms.some(r    => cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h) ||
+          doorways.some(d => cx >= d.x && cx <= d.x + d.w && cy >= d.y && cy <= d.y + d.h)
         );
 
         if (hitFurniture) {
           // Use the probe's actual position clamped to the furniture surface (not center-snap)
-          // Inset by 4px on sides so the camera body doesn't hang off the edge
+          // Inset by 4px on sides so the item body doesn't hang off the edge
           placementPreview.x          = Math.max(hitFurniture.x + 4, Math.min(hitFurniture.x + hitFurniture.w - 4, probeX));
           placementPreview.y          = Math.max(hitFurniture.y + 2, Math.min(hitFurniture.y + hitFurniture.h - 2, probeY));
           placementPreview.valid      = true;
           placementPreview.snapTarget = { type: "furniture", ref: hitFurniture };
         } else if (hitTripod) {
-          // Snap to tripod mount head center
+          // Snap to tripod mount head center (camera only)
           placementPreview.x          = hitTripod.x + 6;
           placementPreview.y          = hitTripod.y + 6;
           placementPreview.valid      = true;
           placementPreview.snapTarget = { type: "tripod", ref: hitTripod };
+        } else if (hitFloor) {
+          // Journal on floor — place at player's feet
+          placementPreview.x          = cx;
+          placementPreview.y          = cy;
+          placementPreview.valid      = true;
+          placementPreview.snapTarget = null;
         } else {
           placementPreview.x          = probeX;
           placementPreview.y          = probeY;
@@ -2351,18 +2431,21 @@
         }
       });
 
-      // Light switch indicators — slim flush-mount plate, wall-tone, with tiny toggle nub
+      // Light switch indicators — near-flush wall plate, minimal visual footprint
+      // Visual drawn +1px toward the wall vs the hitbox (light.x) so it reads as inset.
       roomLights.forEach(light => {
-        // Mounting plate: narrow, low-contrast against wall, slightly inset shadow
-        ctx.fillStyle = "#252018";          // dark warm-grey, close to wall tone
-        ctx.fillRect(light.x, light.y, 5, 9);
-        // Subtle raised-edge highlight (top-left edge only — reads as slight depth)
-        ctx.fillStyle = "#3a3228";
-        ctx.fillRect(light.x, light.y, 5, 1); // top edge
-        ctx.fillRect(light.x, light.y, 1, 9); // left edge
-        // Toggle nub — 2×3px, centered on plate
-        ctx.fillStyle = light.on ? "#8ab820" : "#3a1a1a"; // muted green / dark red
-        ctx.fillRect(light.x + 1, light.y + 3, 2, 3);
+        // East-wall: push right so plate right-edge is flush with wall inner face
+        // West-wall: keep as-is (plate left-edge already 3px from wall inner face)
+        const vx = light.side === "west" ? light.x : light.x + 3;
+        // Mounting plate: 4×7px, very close to wall tone
+        ctx.fillStyle = "#221e16";
+        ctx.fillRect(vx, light.y, 4, 7);
+        // Single-pixel top-edge hint only — just enough to suggest slight thickness
+        ctx.fillStyle = "#332e22";
+        ctx.fillRect(vx, light.y, 4, 1);
+        // Toggle indicator — 2×2px dot, centered
+        ctx.fillStyle = light.on ? "#7aaa18" : "#321414";
+        ctx.fillRect(vx + 1, light.y + 2, 2, 2);
       });
 
 
@@ -2867,13 +2950,42 @@
           px >= fRoom.x && px < fRoom.x + fRoom.w &&
           py >= fRoom.y && py < fRoom.y + fRoom.h;
         if (!playerInRoom) continue;
-        // Style palette: wood (default) | bed | counter | seat
+        // Style palette: wood (default) | bed | counter | seat | rug | accent | shoe
         const fs = f.style || "wood";
         const [cBase, cTop, cHi, cFront, cAccent] =
           fs === "bed"     ? ["#2a2038","#3c2e50","#4e3e66","#1e1830","#6a5488"] :
           fs === "counter" ? ["#2a2826","#3c3830","#4a4440","#201e1c","#555048"] :
           fs === "seat"    ? ["#3a2a1e","#5a3e2a","#724e38","#2a1c14","#8a6248"] :
+          fs === "rug"     ? ["#3a2a18","#503c28","#624e38","#2a1e10","#705640"] :
+          fs === "accent"  ? ["#a07020","#c89030","#daa840","#805810","#e8c050"] : // key bowl — warm brass
+          fs === "shoe"    ? ["#1e1a14","#2e2820","#3c3428","#141010","#4a4038"] : // shoes — dark
                              ["#7a5230","#9a6a40","#b07840","#5a3a18","#c8a040"]; // wood
+
+        // ── Rug: flat floor layer — no elevation, just fill + decorative border ──
+        if (fs === "rug") {
+          ctx.fillStyle = cBase;  ctx.fillRect(f.x, f.y, f.w, f.h);             // outer border band
+          ctx.fillStyle = cTop;   ctx.fillRect(f.x+3, f.y+3, f.w-6, f.h-6);    // main field
+          ctx.strokeStyle = cHi;     ctx.lineWidth = 0.8;
+          ctx.strokeRect(f.x+1.5, f.y+1.5, f.w-3, f.h-3);                      // outer decorative line
+          ctx.strokeStyle = cAccent; ctx.lineWidth = 0.5;
+          ctx.strokeRect(f.x+5, f.y+5, f.w-10, f.h-10);                        // inner border line
+          // Center diamond motif
+          const rdx = f.x + f.w/2, rdy = f.y + f.h/2, rdr = Math.min(f.w, f.h) * 0.18;
+          ctx.beginPath();
+          ctx.moveTo(rdx, rdy-rdr); ctx.lineTo(rdx+rdr, rdy);
+          ctx.lineTo(rdx, rdy+rdr); ctx.lineTo(rdx-rdr, rdy); ctx.closePath();
+          ctx.stroke();
+          continue;
+        }
+        // ── Accent / shoe: tiny flat pieces — no 3D shadow ────────────────────
+        if (fs === "accent" || fs === "shoe") {
+          ctx.fillStyle = cTop;   ctx.fillRect(f.x, f.y, f.w, f.h);
+          ctx.strokeStyle = cFront; ctx.lineWidth = 0.5;
+          ctx.strokeRect(f.x, f.y, f.w, f.h);
+          continue;
+        }
+
+        // ── Standard elevated furniture (wood / bed / counter / seat) ─────────
         ctx.fillStyle = "rgba(0,0,0,0.28)"; ctx.fillRect(f.x + 2, f.y + 3, f.w, f.h); // drop shadow
         ctx.fillStyle = cBase;  ctx.fillRect(f.x,     f.y,     f.w,     f.h);
         ctx.fillStyle = cTop;   ctx.fillRect(f.x + 1, f.y + 1, f.w - 2, f.h - 3);
@@ -3127,6 +3239,58 @@
             }
           }
 
+        } else if (it.name === "Journal") {
+          if (!on) {
+            // Closed journal — worn leather cover
+            ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(-8, -5, 17, 10);
+            ctx.fillStyle = "#7a5030"; ctx.fillRect(-7, -4, 15, 8);   // cover
+            ctx.fillStyle = "#9a6840"; ctx.fillRect(-6, -3, 13, 6);   // cover highlight
+            ctx.fillStyle = "#5a3818"; ctx.fillRect(-2, -4, 2, 8);    // spine
+            ctx.fillStyle = "#c89060"; ctx.fillRect(-1, -4, 1, 8);    // spine highlight
+            ctx.fillStyle = "#c8a040";
+            ctx.fillRect(5, -4, 2, 1); ctx.fillRect(5, 3, 2, 1);     // corner clasps
+            ctx.fillStyle = "#e8dcc0"; ctx.fillRect(7, -3, 1, 6);     // page edge
+          } else {
+            // Open journal — two-page spread, writable by ghost
+            const shaking = it.writeAnimTimer > 0;
+            const shk = shaking ? (Math.random() - 0.5) * 2.5 : 0;
+            ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(-9 + shk, -7, 20, 14);
+            ctx.fillStyle = "#e8e0c8"; ctx.fillRect(-8 + shk, -6, 8, 12); // left page
+            ctx.fillStyle = "#f0e8d0"; ctx.fillRect( 0 + shk, -6, 8, 12); // right page
+            ctx.fillStyle = "#7a5030"; ctx.fillRect(-1 + shk, -6, 2, 12); // spine (leather tone)
+            // Ruled lines
+            ctx.strokeStyle = "rgba(100,130,200,0.35)"; ctx.lineWidth = 0.5;
+            for (let rl = -4; rl <= 4; rl += 2) {
+              ctx.beginPath(); ctx.moveTo(-7 + shk, rl); ctx.lineTo(-1 + shk, rl); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo( 1 + shk, rl); ctx.lineTo( 7 + shk, rl); ctx.stroke();
+            }
+            if (it.written) {
+              // Ghost has written in it — ink bleed tint + heavy dark scrawls
+              const lx = shk;
+              const inkA = shaking ? 0.5 + Math.random() * 0.4 : 1.0;
+              // Ink bleed: subtle dark-purple stain across both pages (visible even at small scale)
+              ctx.fillStyle = shaking
+                ? `rgba(80,40,180,${0.22 + Math.random() * 0.1})`
+                : "rgba(40,20,90,0.18)";
+              ctx.fillRect(-8+lx,-6,7,12);  // left page bleed
+              ctx.fillRect(0+lx,-6,8,12);   // right page bleed
+              // Thick ink scrawls — lineWidth 2 so they're readable after 0.75× scale
+              ctx.strokeStyle = `rgba(12,6,40,${inkA})`; ctx.lineWidth = 2;
+              ctx.lineCap = "round";
+              const lp = lx; // left page strokes
+              ctx.beginPath(); ctx.moveTo(-7+lp,-4); ctx.lineTo(-4+lp,-3); ctx.lineTo(-2+lp,-4); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(-7+lp,-1); ctx.lineTo(-3+lp, 0); ctx.lineTo(-5+lp, 1); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(-7+lp, 3); ctx.lineTo(-3+lp, 2); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(-6+lp, 4); ctx.lineTo(-3+lp, 5); ctx.stroke();
+              const rp = lx; // right page strokes
+              ctx.beginPath(); ctx.moveTo(1+rp,-5); ctx.lineTo(4+rp,-4); ctx.lineTo(6+rp,-5); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(1+rp,-2); ctx.lineTo(5+rp,-1); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(2+rp, 2); ctx.lineTo(6+rp, 1); ctx.lineTo(4+rp, 3); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(1+rp, 4); ctx.lineTo(4+rp, 5); ctx.stroke();
+              ctx.lineCap = "butt"; // reset
+            }
+          }
+
         } else if (it.name === "Lighter") {
           // Small flip lighter
           ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(-4, -5, 10, 10);
@@ -3236,14 +3400,12 @@
 
         ctx.restore();
 
-        // --- Active indicator dot (small, screen-aligned, top-right of item origin) ---
-        ctx.fillStyle = on ? "#40ff80" : "#444";
-        ctx.beginPath(); ctx.arc(it.x + 11, it.y + 1, 2, 0, Math.PI*2); ctx.fill();
-        if (it.name === "Ghost Book" && it.written) { // purple dot = evidence found
+        // --- Item-specific status indicators (no generic on/off dot) ---
+        if ((it.name === "Ghost Book" || it.name === "Journal") && it.written) { // purple dot = evidence written
           ctx.fillStyle = it.writeAnimTimer > 0 ? "#c060ff" : "#8040c0";
           ctx.beginPath(); ctx.arc(it.x + 11, it.y + 1, 2, 0, Math.PI*2); ctx.fill();
         }
-        if (it.name === "Video Camera" && on) {  // override with red for recording
+        if (it.name === "Video Camera" && on) { // red dot = recording
           ctx.fillStyle = "#ff2020"; ctx.beginPath(); ctx.arc(it.x + 11, it.y + 1, 2, 0, Math.PI*2); ctx.fill();
         }
 
@@ -3255,7 +3417,7 @@
 
 
 
-      // --- Camera placement preview (ghost silhouette while G held) ---
+      // --- Placement preview (ghost silhouette while G held) — Camera or Journal ---
       if (placementPreview.active) {
         const px = placementPreview.x, py = placementPreview.y;
         const f  = placementPreview.angle;
@@ -3265,17 +3427,39 @@
         ctx.translate(px, py);
         ctx.rotate(f);
         ctx.scale(0.5, 0.5); // same scale as placed floor items
-        // Camera body ghost
-        ctx.fillStyle = col;
-        ctx.fillRect(-8, -5, 24, 10);  // body
-        ctx.fillRect(-7, -4, 22, 8);
-        ctx.fillRect(-2, -6, 8, 2);    // viewfinder bump
-        ctx.fillRect(10, -4, 7, 7);    // lens barrel
-        // Rim outline
-        ctx.strokeStyle = rim; ctx.lineWidth = 1.5;
-        ctx.strokeRect(-8, -5, 24, 10);
-        // Lens ring
-        ctx.beginPath(); ctx.arc(15, 0, 3.5, 0, Math.PI * 2); ctx.stroke();
+        if (placementPreview.item === "Journal" || placementPreview.item === "Ghost Book") {
+          // Open book ghost — two pages spread flat
+          ctx.fillStyle = col;
+          ctx.fillRect(-14, -9, 13, 18);  // left page
+          ctx.fillRect(1,   -9, 13, 18);  // right page
+          ctx.fillStyle = rim;
+          ctx.fillRect(-1,  -9, 2,  18);  // spine
+          ctx.strokeStyle = rim; ctx.lineWidth = 1.5;
+          ctx.strokeRect(-14, -9, 13, 18);
+          ctx.strokeRect(1,   -9, 13, 18);
+          // ruled lines on left page
+          ctx.lineWidth = 0.8; ctx.globalAlpha = 0.5;
+          for (let rl = -5; rl <= 7; rl += 4) {
+            ctx.beginPath(); ctx.moveTo(-12, rl); ctx.lineTo(-3, rl); ctx.stroke();
+          }
+          // ruled lines on right page
+          for (let rl = -5; rl <= 7; rl += 4) {
+            ctx.beginPath(); ctx.moveTo(3, rl); ctx.lineTo(12, rl); ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+        } else {
+          // Camera body ghost
+          ctx.fillStyle = col;
+          ctx.fillRect(-8, -5, 24, 10);  // body
+          ctx.fillRect(-7, -4, 22, 8);
+          ctx.fillRect(-2, -6, 8, 2);    // viewfinder bump
+          ctx.fillRect(10, -4, 7, 7);    // lens barrel
+          // Rim outline
+          ctx.strokeStyle = rim; ctx.lineWidth = 1.5;
+          ctx.strokeRect(-8, -5, 24, 10);
+          // Lens ring
+          ctx.beginPath(); ctx.arc(15, 0, 3.5, 0, Math.PI * 2); ctx.stroke();
+        }
         ctx.restore();
         // Direction arrow (world-space, points forward from preview)
         ctx.strokeStyle = placementPreview.valid ? "rgba(100,200,255,0.7)" : "rgba(255,100,100,0.6)";
@@ -3286,7 +3470,6 @@
         ctx.lineTo(px + Math.cos(f) * 18, py + Math.sin(f) * 18);
         ctx.stroke();
         ctx.setLineDash([]);
-        // "PLACE" / "NO SURFACE" label above preview (screen-stable — draw after restore)
       }
 
       // Held UV beam — world-space cone identical to placed UV Flashlight beam
@@ -3476,6 +3659,16 @@
             ctx.beginPath();ctx.moveTo(-5,rl);ctx.lineTo(-1,rl);ctx.stroke();
             ctx.beginPath();ctx.moveTo(1,rl);ctx.lineTo(5,rl);ctx.stroke();
           }
+
+        } else if (heldName === "Journal") {
+          // Closed leather journal held in hand
+          ctx.fillStyle = "#7a5030"; ctx.fillRect(-7,-7,14,12);       // cover
+          ctx.fillStyle = "#9a6840"; ctx.fillRect(-6,-6,12,10);       // cover highlight
+          ctx.fillStyle = "#5a3818"; ctx.fillRect(-2,-7,2,12);        // spine
+          ctx.fillStyle = "#c8a060";
+          ctx.fillRect(4,-7,2,2);     // top clasp
+          ctx.fillRect(4, 3,2,2);     // bottom clasp
+          ctx.fillStyle = "#e8dcc0"; ctx.fillRect(6,-5,1,8);          // page edge
 
         } else if (heldName === "Incense") {
           // Unlit: bare sticks.  Burning (TODO): ember tips + smoke
@@ -3900,23 +4093,31 @@
         ctx.fillStyle = "#ff2222"; ctx.fillText("█ player rect",    10, 44);
       }
 
-      // Camera placement preview HUD hint
+      // Placement preview HUD hint
       if (placementPreview.active) {
+        const isJournalPrev = placementPreview.item === "Journal" || placementPreview.item === "Ghost Book";
         ctx.save();
         ctx.font = "bold 13px monospace";
         ctx.textAlign = "center";
         ctx.fillStyle = "rgba(0,0,0,0.55)";
-        ctx.beginPath(); ctx.roundRect(286, 268, 228, 36, 6); ctx.fill();
+        ctx.beginPath(); ctx.roundRect(isJournalPrev ? 266 : 286, 268, isJournalPrev ? 268 : 228, 36, 6); ctx.fill();
         if (placementPreview.valid) {
-          ctx.fillStyle = "#80c8ff";
-          ctx.fillText("release G to place camera", 400, 289);
-          ctx.font = "9px monospace"; ctx.fillStyle = "#5090c0";
-          ctx.fillText("aim mouse to rotate", 400, 304);
+          if (isJournalPrev) {
+            ctx.fillStyle = "#80ffb0";
+            ctx.fillText("release V to place journal open", 400, 289);
+            ctx.font = "9px monospace"; ctx.fillStyle = "#5090c0";
+            ctx.fillText("aim mouse to rotate", 400, 304);
+          } else {
+            ctx.fillStyle = "#80c8ff";
+            ctx.fillText("release V to place camera", 400, 289);
+            ctx.font = "9px monospace"; ctx.fillStyle = "#5090c0";
+            ctx.fillText("aim mouse to rotate", 400, 304);
+          }
         } else {
           ctx.fillStyle = "#ff8080";
-          ctx.fillText("no surface — aim at furniture", 400, 289);
+          ctx.fillText(isJournalPrev ? "no valid surface" : "no surface — aim at furniture", 400, 289);
           ctx.font = "9px monospace"; ctx.fillStyle = "#c06060";
-          ctx.fillText("release G to cancel", 400, 304);
+          ctx.fillText("release V to cancel", 400, 304);
         }
         ctx.restore();
         ctx.textAlign = "left";
@@ -4339,8 +4540,9 @@
         const bx = 68, by = 88, bw = 664, bh = 440;
         const rowEy = [8, 154, 300];
         equipmentList.forEach((item, i) => {
-          const col = i % 5;
-          const row = Math.floor(i / 5);
+          const rows = 3;
+          const col = Math.floor(i / rows);
+          const row = i % rows;
           const sx = (bx - pegScrollX) + 14 + col * colSpacing; // screen x
           const sy = by + rowEy[row];                            // screen y
           if (mx >= sx && mx <= sx + slotW && my >= sy && my <= sy + slotH) {
@@ -4568,10 +4770,10 @@
       }
       ctx.setLineDash([]);
 
-      // Items — 5 per row across 3 rows (row = Math.floor(i/5), col = i%5)
+      // Items — column-first: top→bottom within each column, then next column right
       equipmentList.forEach((item, i) => {
-        const col = i % 5;
-        const row = Math.floor(i / 5);
+        const col = Math.floor(i / rows);
+        const row = i % rows;
         const ex = 14 + col * colSpacing; // virtual board x
         const ey = rowEy[row];             // virtual board y for this row
 
@@ -4618,15 +4820,15 @@
           ctx.fillStyle = "rgba(255,220,140,0.05)";
           ctx.fillRect(ex, ey, slotW, 2);
 
-          // Equipment silhouettes — one per item type (index matches equipmentList order)
-          const shapes = [
-            () => { // Flashlight — cylindrical torch
+          // Equipment silhouettes — keyed by item name so order is independent of slot index
+          const shapes = {
+            "Flashlight": () => {
               ctx.fillStyle = "#c8a820"; ctx.fillRect(ex+70, ey+28, 22, 74); // body
               ctx.fillStyle = "#f0d060"; ctx.fillRect(ex+67, ey+24, 28, 12); // head
               ctx.fillStyle = "#ffffc0"; ctx.fillRect(ex+70, ey+26, 22, 6);  // lens glow
               ctx.fillStyle = "#8a7010"; ctx.fillRect(ex+74, ey+72, 14, 30); // grip
             },
-            () => { // EMF Reader — handheld wand with antenna
+            "EMF Reader": () => {
               ctx.fillStyle = "#2a5a80"; ctx.fillRect(ex+76, ey+30, 34, 72); // body
               ctx.fillStyle = "#4a8ab0"; ctx.fillRect(ex+80, ey+28, 26, 40); // grip face
               ctx.fillStyle = "#6aaad0"; ctx.fillRect(ex+88, ey+10, 8, 22);  // antenna
@@ -4634,17 +4836,17 @@
               ctx.fillStyle = "#40e840"; ctx.fillRect(ex+90, ey+34, 5, 5);   // green LED
               ctx.fillStyle = "#e8e840"; ctx.fillRect(ex+98, ey+34, 5, 5);   // yellow LED
             },
-            () => { // Spirit Box — small radio box with speaker grill
+            "Spirit Box": () => {
               ctx.fillStyle = "#3a3020"; ctx.fillRect(ex+62, ey+20, 62, 76); // body
               ctx.fillStyle = "#5a4a30"; ctx.fillRect(ex+66, ey+24, 54, 44); // face panel
-              ctx.fillStyle = "#1a1410"; // speaker grill dots
+              ctx.fillStyle = "#1a1410";
               for (let gr = 0; gr < 4; gr++) for (let gc = 0; gc < 6; gc++)
                 ctx.fillRect(ex+70+gc*8, ey+28+gr*8, 3, 3);
               ctx.fillStyle = "#e84020"; ctx.fillRect(ex+66, ey+72, 10, 8);  // power light
               ctx.fillStyle = "#7a6040"; ctx.fillRect(ex+96, ey+22, 6, 20);  // dial
               ctx.fillStyle = "#888";    ctx.fillRect(ex+110, ey+22, 8, 4);  // antenna
             },
-            () => { // UV Flashlight — long torch shape
+            "UV Flashlight": () => {
               ctx.fillStyle = "#5a5a20"; ctx.fillRect(ex+84, ey+60, 20, 50); // handle
               ctx.fillStyle = "#7a7a30"; ctx.fillRect(ex+80, ey+40, 28, 24); // barrel
               ctx.fillStyle = "#a0a040"; ctx.fillRect(ex+78, ey+26, 32, 16); // head
@@ -4652,7 +4854,7 @@
               ctx.beginPath(); ctx.arc(ex+94, ey+26, 14, 0, Math.PI*2); ctx.fill();
               ctx.fillStyle = "#d0d0ff"; ctx.fillRect(ex+82, ey+18, 24, 10); // lens
             },
-            () => { // Ghost Book — open notebook with spiral binding
+            "Ghost Book": () => {
               ctx.fillStyle = "#d4c8a0"; ctx.fillRect(ex+56, ey+18, 74, 88); // pages
               ctx.fillStyle = "#b8aa80"; ctx.fillRect(ex+56, ey+18, 36, 88); // left page
               ctx.fillStyle = "#1a1208"; ctx.fillRect(ex+91, ey+18, 3, 88);  // spine
@@ -4663,7 +4865,7 @@
               ctx.fillStyle = "#7a7a7a";
               for (let sp = 0; sp < 8; sp++) ctx.fillRect(ex+88, ey+24+sp*10, 7, 5);
             },
-            () => { // Video Camera — boxy body + lens
+            "Video Camera": () => {
               ctx.fillStyle = "#2a2a2a"; ctx.fillRect(ex+60, ey+24, 66, 46); // body
               ctx.fillStyle = "#3a3a3a"; ctx.fillRect(ex+64, ey+28, 58, 38); // face
               ctx.fillStyle = "#0a0a14";
@@ -4675,7 +4877,7 @@
               ctx.fillStyle = "#e84040"; ctx.fillRect(ex+108, ey+30, 8, 5);  // REC
               ctx.fillStyle = "#3a3a3a"; ctx.fillRect(ex+60, ey+70, 66, 10); // grip
             },
-            () => { // Thermometer — long probe with bulb
+            "Thermometer": () => {
               ctx.fillStyle = "#c0c0c0"; ctx.fillRect(ex+88, ey+12, 10, 80); // shaft
               ctx.fillStyle = "#e0e0e0"; ctx.fillRect(ex+90, ey+14, 6, 60);  // highlight
               ctx.fillStyle = "#e03030";
@@ -4685,10 +4887,9 @@
               ctx.fillStyle = "#808080";
               for (let tm = 0; tm < 6; tm++) ctx.fillRect(ex+98, ey+20+tm*10, 6, 2);
             },
-            () => { // Sound Recorder — handled here only when qty > 0
+            "Sound Recorder": () => {
               ctx.fillStyle = "#2a2a2a"; ctx.fillRect(ex+72, ey+16, 42, 80); // body
               ctx.fillStyle = "#404040"; ctx.fillRect(ex+76, ey+20, 34, 56); // face
-              // Mic grille (dots)
               ctx.fillStyle = "#1a1a1a";
               for (let mr = 0; mr < 3; mr++) for (let mc = 0; mc < 3; mc++)
                 ctx.fillRect(ex+80+mc*8, ey+24+mr*8, 4, 4);
@@ -4696,95 +4897,81 @@
               ctx.fillStyle = "#888";    ctx.fillRect(ex+90, ey+82, 18, 6);  // pause btn
               ctx.fillStyle = "#c0c0c0"; ctx.fillRect(ex+74, ey+104, 38, 4); // bottom
             },
-            () => { // D.O.T.S. Projector — flat rectangular projector unit
+            "D.O.T.S. Projector": () => {
               ctx.fillStyle = "#1a1a2a"; ctx.fillRect(ex+60, ey+40, 56, 36); // body
               ctx.fillStyle = "#2a2a3a"; ctx.fillRect(ex+62, ey+42, 52, 32); // face panel
-              ctx.fillStyle = "#e840e8"; // dot grid LEDs
+              ctx.fillStyle = "#e840e8";
               for (let dr = 0; dr < 3; dr++) for (let dc = 0; dc < 5; dc++)
                 ctx.fillRect(ex+66+dc*9, ey+46+dr*9, 3, 3);
               ctx.fillStyle = "#6040c0"; ctx.fillRect(ex+64, ey+80, 48, 6);  // base
               ctx.fillStyle = "#c0a0ff"; ctx.fillRect(ex+66, ey+44, 52, 2);  // top sheen
             },
-            () => { // Tripod — standing three-leg camera mount
-              const tx = ex + 93, ty = ey + 90; // base center point
+            "Tripod": () => {
+              const tx = ex + 93, ty = ey + 90;
               ctx.strokeStyle = "#606050"; ctx.lineWidth = 3;
-              // Three legs
-              ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx,      ty - 70); ctx.stroke(); // front leg up
-              ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - 44, ty + 18); ctx.stroke(); // rear-left
-              ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx + 44, ty + 18); ctx.stroke(); // rear-right
-              // Feet
+              ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx,      ty - 70); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - 44, ty + 18); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx + 44, ty + 18); ctx.stroke();
               ctx.fillStyle = "#484840";
               ctx.beginPath(); ctx.arc(tx,      ty - 70, 4, 0, Math.PI*2); ctx.fill();
               ctx.beginPath(); ctx.arc(tx - 44, ty + 18, 4, 0, Math.PI*2); ctx.fill();
               ctx.beginPath(); ctx.arc(tx + 44, ty + 18, 4, 0, Math.PI*2); ctx.fill();
-              // Center column
               ctx.fillStyle = "#909080"; ctx.fillRect(tx - 6, ty - 68, 12, 60);
               ctx.fillStyle = "#b0b0a0"; ctx.fillRect(tx - 4, ty - 66, 8, 56);
-              // Head mount
               ctx.fillStyle = "#707060"; ctx.fillRect(tx - 12, ty - 74, 24, 10);
               ctx.fillStyle = "#909080"; ctx.fillRect(tx - 10, ty - 72, 20, 7);
             },
-            () => { // Sanity Meds — pill bottle
+            "Sanity Meds": () => {
               ctx.fillStyle = "#e8e8e0"; ctx.fillRect(ex+76, ey+30, 30, 64); // bottle
               ctx.fillStyle = "#d0d0c8"; ctx.fillRect(ex+78, ey+32, 26, 60); // face
               ctx.fillStyle = "#e84020"; ctx.fillRect(ex+74, ey+22, 34, 12); // cap
-              ctx.fillStyle = "#c83010"; ctx.fillRect(ex+76, ey+24, 30, 8);  // cap side
-              // Label band
-              ctx.fillStyle = "#4080c0"; ctx.fillRect(ex+76, ey+48, 30, 20);
-              // Pill cross symbol
+              ctx.fillStyle = "#c83010"; ctx.fillRect(ex+76, ey+24, 30, 8);
+              ctx.fillStyle = "#4080c0"; ctx.fillRect(ex+76, ey+48, 30, 20); // label
               ctx.fillStyle = "#ffffff"; ctx.fillRect(ex+88, ey+52, 6, 12);
               ctx.fillStyle = "#ffffff"; ctx.fillRect(ex+84, ey+56, 14, 4);
             },
-            () => { // Lighter — small flip lighter
+            "Lighter": () => {
               ctx.fillStyle = "#c8a020"; ctx.fillRect(ex+82, ey+50, 22, 44); // body
               ctx.fillStyle = "#e0b830"; ctx.fillRect(ex+84, ey+52, 18, 40); // face shine
               ctx.fillStyle = "#8a6e10"; ctx.fillRect(ex+82, ey+44, 22, 8);  // flint wheel
-              // Flint ridges
               ctx.fillStyle = "#c89820";
               for (let fr = 0; fr < 4; fr++) ctx.fillRect(ex+84+fr*4, ey+45, 3, 6);
-              // Flame (small when lit)
               ctx.fillStyle = "rgba(255,160,20,0.7)";
               ctx.beginPath(); ctx.arc(ex+93, ey+40, 5, 0, Math.PI*2); ctx.fill();
               ctx.fillStyle = "rgba(255,220,80,0.5)";
               ctx.beginPath(); ctx.arc(ex+93, ey+37, 3, 0, Math.PI*2); ctx.fill();
             },
-            () => { // Incense — bundle of sticks in holder
-              // Holder dish
+            "Incense": () => {
               ctx.fillStyle = "#6a4828"; ctx.fillRect(ex+68, ey+104, 48, 8);
               ctx.fillStyle = "#8a5a30"; ctx.fillRect(ex+72, ey+100, 40, 6);
-              // Incense sticks (3 sticks, slightly fanned)
               ctx.fillStyle = "#c8a060";
-              ctx.fillRect(ex+84, ey+20, 3, 84); // left stick
-              ctx.fillRect(ex+90, ey+16, 3, 88); // center stick
-              ctx.fillRect(ex+96, ey+20, 3, 84); // right stick
-              // Ember glow tips
+              ctx.fillRect(ex+84, ey+20, 3, 84);
+              ctx.fillRect(ex+90, ey+16, 3, 88);
+              ctx.fillRect(ex+96, ey+20, 3, 84);
               ctx.fillStyle = "#e84000";
               ctx.fillRect(ex+84, ey+18, 3, 4);
               ctx.fillRect(ex+90, ey+14, 3, 4);
               ctx.fillRect(ex+96, ey+18, 3, 4);
-              // Smoke wisps
               ctx.fillStyle = "rgba(200,200,200,0.25)";
               ctx.fillRect(ex+85, ey+10, 2, 8);
               ctx.fillRect(ex+91, ey+6,  2, 8);
               ctx.fillRect(ex+97, ey+10, 2, 8);
             },
-            () => { // Crucifix — latin cross
+            "Crucifix": () => {
               const cx = ex + 90, cy = ey + 80;
-              ctx.fillStyle = "#c89830"; // gold cross
-              ctx.fillRect(cx - 5,  cy - 60, 10, 80); // vertical bar
-              ctx.fillRect(cx - 26, cy - 40, 52, 10); // horizontal bar
-              // Cross sheen
+              ctx.fillStyle = "#c89830";
+              ctx.fillRect(cx - 5,  cy - 60, 10, 80);
+              ctx.fillRect(cx - 26, cy - 40, 52, 10);
               ctx.fillStyle = "#e8b840";
               ctx.fillRect(cx - 3,  cy - 58, 4, 76);
               ctx.fillRect(cx - 24, cy - 38, 48, 4);
-              // Base detail
               ctx.fillStyle = "#a87820";
               ctx.fillRect(cx - 6,  cy + 18, 12, 4);
             },
-          ];
-          // Use custom shape if defined, otherwise draw a generic placeholder card
-          if (shapes[i]) {
-            shapes[i]();
+          };
+          // Look up shape by item name — order-independent single source of truth
+          if (shapes[item.name]) {
+            shapes[item.name]();
           } else {
             // Placeholder silhouette — shown for stub items not yet fully illustrated
             ctx.fillStyle = "#1e1e1e"; ctx.fillRect(ex+60, ey+20, 66, 86);
@@ -4794,7 +4981,8 @@
             ctx.font = "bold 22px monospace"; ctx.textAlign = "center";
             ctx.fillText("?", ex + 93, ey + 72);
             // Category colour strip at bottom of card
-            const cat = ITEMS[i] ? ITEMS[i].category : "optional";
+            const catEntry = ITEMS.find(it => it.name === item.name);
+            const cat = catEntry ? catEntry.category : "optional";
             ctx.fillStyle = cat === "cursed" ? "#4a1a3a" : cat === "starter" ? "#1a3a2a" : "#2a2a1a";
             ctx.fillRect(ex+60, ey+96, 66, 10);
           }
@@ -5198,6 +5386,7 @@
           { key:"flashlight", label:"Flashlight"  },
           { key:"journal",    label:"Journal"     },
           { key:"drop",       label:"Drop Item"   },
+          { key:"place",      label:"Place Item"  },
           { key:"inventory",  label:"Cycle Inv."  },
           { key:"use",        label:"Use / Toggle"},
         ];
