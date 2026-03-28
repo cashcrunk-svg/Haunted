@@ -213,9 +213,12 @@
     let _titleMx = 0, _titleMy = 0; // canvas-space mouse position for hover states
     let _titleStartRect   = null;   // start button rect (title screen), set each frame
     let _titleBeginRect   = null;   // "begin investigation" rect (corkboard page 2)
+    let _photoRect        = null;   // ID card photo clickable rect (corkboard page 2)
+    let _agentPortrait    = 0;      // 0–5: which of the 6 portraits is shown
     let _titleMapRects    = [];     // [{id, x, y, w, h}], set each frame
     let _titleNavLeft     = null;   // left arrow rect
     let _titleNavRight    = null;   // right arrow rect
+    let _corkJournalBtnRect = null; // journal button in corkboard top bar
     let _truckTab         = "shop"; // active truck monitor subpage: "shop"|"truck"|"layout"|"character"
     let _truckNavRects    = [];     // [{tab, x, y, w, h}], set each frame by _drawPageShop
     let _shopSelectedItem = 0;       // index into SHOP_CATALOG
@@ -226,9 +229,32 @@
     let _truckSelItem     = 0;        // selected index in TRUCK_CATALOG
     let _truckListScroll  = 0;        // scroll offset for truck item list
     let _truckItemRects   = [];       // [{idx, x, y, w, h}], set each frame
-    let _layoutSelItem    = 0;        // selected index for Layout tab (TRUCK_CATALOG reused for now)
+    // Round loadout: array of { name, qty, level } — source of truth for in-game equipment
+    let _roundLoadout     = [];       // items chosen for the next round
+    let _truckAddBtnRect  = null;     // unused legacy; kept so old click handler refs don't throw
+    let _truckQtyDecRect  = null;     // unused legacy
+    let _truckQtyIncRect  = null;     // unused legacy
+    // Per-row interactive rects for the new truck tab layout
+    // Each entry: { idx, type: "row"|"minus"|"plus"|"lvl", x,y,w,h, [lvl] }
+    let _truckRowRects    = [];
+    let _layoutSelItem    = 0;        // selected item index in the Layout item list
     let _layoutListScroll = 0;        // scroll offset for layout item list
+    // Layout preset state
+    let _layoutSlot       = 0;        // active preset slot: 0, 1, 2
+    let _layoutActive     = -1;       // which slot is "active" (will seed next round): -1 = none
+    // 3 preset slots, each stores array of { name, qty, level } or null if empty
+    let _layoutPresets    = [null, null, null];
+    // Per-row rects for the Layout item list (same structure as _truckRowRects)
+    let _layoutRowRects   = [];
+    // Action button rects for the Layout right panel
+    let _layoutSaveBtnRect    = null;
+    let _layoutActiveBtnRect  = null;
+    let _layoutSlotRects      = [];
     let _layoutItemRects  = [];       // [{idx, x, y, w, h}], set each frame
+    let _journalLogoutBtnRect  = null;
+    let _journalLogoutConfirm  = false;
+    let _journalLogoutYesRect  = null;
+    let _journalLogoutNoRect   = null;
     let gameRunning  = false;
     let roundOver    = false;
     let guessCorrect = false;
@@ -560,6 +586,22 @@
       ghostTargetX = 0; ghostTargetY = 0;
       ghostMoveAngle = 0; ghostPauseTimer = 0; ghostWalkCycle = 0;
       vanDoor.open    = false;
+
+      // ── Apply truck loadout → equipment wall for this round ──────────────
+      // _roundLoadout is the source of truth.  Items in it get their chosen qty.
+      // Items NOT in _roundLoadout get qty 0 (empty peg slot — not available this round).
+      equipmentList = ITEMS
+        .filter(it => it.category !== "cursed")
+        .map(it => {
+          const chosen = _roundLoadout.find(e => e.name === it.name);
+          return {
+            name:  it.name,
+            qty:   chosen ? chosen.qty : 0,
+            level: chosen ? chosen.level : 1,
+            desc:  it.desc,
+          };
+        });
+
       menuPhase = null;
       titleScreenActive = false;
     }
@@ -809,7 +851,11 @@
       if (menuPhase === "corkboard") {
         if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") { e.preventDefault(); _corkboardNav(+1); return; }
         if (e.key === "ArrowLeft"  || e.key === "a" || e.key === "A") { e.preventDefault(); _corkboardNav(-1); return; }
-        if (e.key === "Escape") { menuPhase = "title"; titleScreenActive = true; return; }
+        if (e.key === "Escape") {
+          if (journalOpen) { journalOpen = false; return; }
+          menuPhase = "title"; titleScreenActive = true; return;
+        }
+        if (e.key.toLowerCase() === keybinds.journal) { journalOpen = !journalOpen; return; }
         if ((e.key === "Enter" || e.key === " ") && _corkboardPage === 2) { e.preventDefault(); _startGame(); }
         return;
       }
@@ -1010,7 +1056,7 @@
         if (voodooDollOpen)     { voodooDollOpen = false; return; }
         if (ouijaBoardOpen)     { ouijaBoardOpen = false; return; }
         if (hauntedMirrorOpen)  { hauntedMirrorOpen = false; return; }
-        if (journalOpen)        { journalOpen = false; return; }
+        if (journalOpen)        { journalOpen = false; _journalLogoutConfirm = false; return; }
         if (gameRunning || roundOver || lostRound) {
           roundOver = false; lostRound = false; showTitle();
         }
@@ -5594,7 +5640,7 @@
           return;
         }
         if (menuPhase === "corkboard" && _corkboardPage === 1 && _truckTab === "truck") {
-          const vis = Math.floor((canvas.height * 0.74) / 26);
+          const vis = Math.floor((canvas.height * 0.74) / 30); // ROW_H=30
           _truckListScroll = Math.max(0, Math.min(TRUCK_CATALOG.length - vis, _truckListScroll + dir));
           return;
         }
@@ -5650,6 +5696,15 @@
         return;
       }
       if (menuPhase === "corkboard") {
+        // If journal is open, skip corkboard navigation — journal handler below will run
+        if (journalOpen) {
+          // fall through to the shared journalOpen handler at the bottom of this function
+        } else {
+        // Journal button
+        if (_corkJournalBtnRect) {
+          const j = _corkJournalBtnRect;
+          if (mx >= j.x && mx <= j.x+j.w && my >= j.y && my <= j.y+j.h) { journalOpen = !journalOpen; return; }
+        }
         // Nav arrows
         if (_titleNavLeft  && mx >= _titleNavLeft.x  && mx <= _titleNavLeft.x  + _titleNavLeft.w  && my >= _titleNavLeft.y  && my <= _titleNavLeft.y  + _titleNavLeft.h)  { _corkboardNav(-1); return; }
         if (_titleNavRight && mx >= _titleNavRight.x && mx <= _titleNavRight.x + _titleNavRight.w && my >= _titleNavRight.y && my <= _titleNavRight.y + _titleNavRight.h) { _corkboardNav(+1); return; }
@@ -5673,15 +5728,98 @@
             }
           }
           if (_truckTab === "truck") {
+            // Per-row controls: minus / plus / level buttons (checked before row select)
+            for (const r of _truckRowRects) {
+              if (mx < r.x || mx > r.x+r.w || my < r.y || my > r.y+r.h) continue;
+              const entry = TRUCK_CATALOG[r.idx];
+              const MAX_QTY = 4;
+              if (r.type === "minus") {
+                const e = _roundLoadout.find(x => x.name === entry.name);
+                if (e) {
+                  e.qty--;
+                  if (e.qty <= 0) _roundLoadout.splice(_roundLoadout.indexOf(e), 1);
+                }
+                _truckSelItem = r.idx; return;
+              }
+              if (r.type === "plus") {
+                const e = _roundLoadout.find(x => x.name === entry.name);
+                if (e) { if (e.qty < MAX_QTY) e.qty++; }
+                else   { _roundLoadout.push({ name: entry.name, qty: 1, level: 1 }); }
+                _truckSelItem = r.idx; return;
+              }
+              if (r.type === "lvl") {
+                const e = _roundLoadout.find(x => x.name === entry.name);
+                if (e) { e.level = r.lvl; }
+                else   { _roundLoadout.push({ name: entry.name, qty: 1, level: r.lvl }); }
+                _truckSelItem = r.idx; return;
+              }
+            }
+            // Row name area — select item for preview
             for (const tr of _truckItemRects) {
               if (mx >= tr.x && mx <= tr.x+tr.w && my >= tr.y && my <= tr.y+tr.h) { _truckSelItem = tr.idx; return; }
             }
           }
           if (_truckTab === "layout") {
-            for (const lr of _layoutItemRects) {
-              if (mx >= lr.x && mx <= lr.x+lr.w && my >= lr.y && my <= lr.y+lr.h) { _layoutSelItem = lr.idx; return; }
+            // Slot A/B/C buttons (no save needed — just UI state)
+            for (const sr of _layoutSlotRects) {
+              if (mx >= sr.x && mx <= sr.x+sr.w && my >= sr.y && my <= sr.y+sr.h) { _layoutSlot = sr.slot; return; }
+            }
+            // Save current _roundLoadout into selected preset slot
+            if (_layoutSaveBtnRect) {
+              const s = _layoutSaveBtnRect;
+              if (mx >= s.x && mx <= s.x+s.w && my >= s.y && my <= s.y+s.h) {
+                _layoutPresets[_layoutSlot] = _roundLoadout.map(e => ({ ...e }));
+                _profSaveLayout(); return;
+              }
+            }
+            // Load preset slot into _roundLoadout
+            if (_layoutActiveBtnRect) {
+              const s = _layoutActiveBtnRect;
+              if (mx >= s.x && mx <= s.x+s.w && my >= s.y && my <= s.y+s.h) {
+                if (_layoutPresets[_layoutSlot]) {
+                  _roundLoadout = _layoutPresets[_layoutSlot].map(e => ({ ...e }));
+                  _layoutActive = _layoutSlot;
+                  _profSaveLayout();
+                }
+                return;
+              }
+            }
+            // Row controls: minus / plus / lvl (edit preset directly)
+            for (const r of _layoutRowRects) {
+              if (mx < r.x || mx > r.x+r.w || my < r.y || my > r.y+r.h) continue;
+              const entry   = TRUCK_CATALOG[r.idx];
+              const MAX_QTY = 4;
+              if (!_layoutPresets[_layoutSlot]) _layoutPresets[_layoutSlot] = [];
+              const preset = _layoutPresets[_layoutSlot];
+              if (r.type === "minus") {
+                const e = preset.find(x => x.name === entry.name);
+                if (e) { e.qty--; if (e.qty <= 0) preset.splice(preset.indexOf(e), 1); }
+                _truckSelItem = r.idx; _profSaveLayout(); return;
+              }
+              if (r.type === "plus") {
+                const e = preset.find(x => x.name === entry.name);
+                if (e) { if (e.qty < MAX_QTY) e.qty++; }
+                else   { preset.push({ name: entry.name, qty: 1, level: 1 }); }
+                _truckSelItem = r.idx; _profSaveLayout(); return;
+              }
+              if (r.type === "lvl") {
+                const e = preset.find(x => x.name === entry.name);
+                if (e) { e.level = r.lvl; }
+                else   { preset.push({ name: entry.name, qty: 1, level: r.lvl }); }
+                _truckSelItem = r.idx; _profSaveLayout(); return;
+              }
+            }
+            // Row name area — select for preview
+            for (const tr of _truckItemRects) {
+              if (mx >= tr.x && mx <= tr.x+tr.w && my >= tr.y && my <= tr.y+tr.h) { _truckSelItem = tr.idx; return; }
             }
           }
+        }
+        // Portrait cycle click (page 2)
+        if (_corkboardPage === 2 && _photoRect &&
+            mx >= _photoRect.x && mx <= _photoRect.x + _photoRect.w &&
+            my >= _photoRect.y && my <= _photoRect.y + _photoRect.h) {
+          _agentPortrait = (_agentPortrait + 1) % 6; return;
         }
         // Begin investigation button (page 2)
         if (_corkboardPage === 2 && _titleBeginRect &&
@@ -5689,7 +5827,9 @@
             my >= _titleBeginRect.y && my <= _titleBeginRect.y + _titleBeginRect.h) {
           _startGame(); return;
         }
-        return;
+        return; // nothing else on corkboard to click
+        } // end else (journal not open)
+        // journal is open — fall through to the shared journalOpen handler below
       }
 
 
@@ -5803,6 +5943,36 @@
               saveControls();
             }
           }
+          // ── Confirm popup intercepts all clicks when open ──
+          if (_journalLogoutConfirm) {
+            if (_journalLogoutYesRect) {
+              const y = _journalLogoutYesRect;
+              if (mx >= y.x && mx <= y.x+y.w && my >= y.y && my <= y.y+y.h) {
+                // Log out
+                _journalLogoutConfirm = false;
+                journalOpen = false;
+                try { localStorage.removeItem(PRU_SESSION_KEY); } catch {}
+                activeProfile = null;
+                menuPhase = "profile";
+                _profUser = ""; _profPass = ""; _profConfirm = ""; _profError = "";
+                return;
+              }
+            }
+            if (_journalLogoutNoRect) {
+              const n = _journalLogoutNoRect;
+              if (mx >= n.x && mx <= n.x+n.w && my >= n.y && my <= n.y+n.h) {
+                _journalLogoutConfirm = false; return;
+              }
+            }
+            return; // absorb all other clicks while popup is open
+          }
+          // ── Log out button ──
+          if (_journalLogoutBtnRect) {
+            const b = _journalLogoutBtnRect;
+            if (mx >= b.x && mx <= b.x+b.w && my >= b.y && my <= b.y+b.h) {
+              _journalLogoutConfirm = true; return;
+            }
+          }
           // ── Right page: keybind rows — shared for both platforms ──
           const _clickActions = ["up","down","left","right","sprint","interact","flashlight","journal","drop","place","inventory","use"];
           const _listTop = jy + 62, _ROW_H = 26;
@@ -5877,7 +6047,7 @@
 
     // --- Equipment Screen (van pegboard, view-only) ---
     // qty = how many are currently in the van; 0 = empty slot (item was used / not restocked)
-    const equipmentList = [
+    let equipmentList = [
       // Derived from master ITEMS registry — cursed items excluded (they spawn in the house, not here)
       ...ITEMS.filter(it => it.category !== "cursed").map(it => ({ name: it.name, qty: it.pegQty, desc: it.desc })),
     ];
@@ -6661,6 +6831,62 @@
         }
       }
 
+      // ── Log Out button (bottom-left of left page, Options tab only) ─────
+      _journalLogoutBtnRect = null;
+      if (journalTab === 2 && activeProfile) {
+        const lbX = lx + 14, lbY = jy + jh - 38, lbW = 100, lbH = 24;
+        const lbHov = _titleMx >= lbX && _titleMx <= lbX+lbW && _titleMy >= lbY && _titleMy <= lbY+lbH;
+        ctx.fillStyle = lbHov ? "#5a1008" : "#3a0c06";
+        ctx.fillRect(lbX, lbY, lbW, lbH);
+        ctx.strokeStyle = lbHov ? "#c03020" : "#7a2010"; ctx.lineWidth = 1;
+        ctx.strokeRect(lbX+0.5, lbY+0.5, lbW-1, lbH-1);
+        ctx.fillStyle = lbHov ? "#f08060" : "#c04030";
+        ctx.font = "bold 9px Georgia, serif"; ctx.textAlign = "center";
+        ctx.fillText("Log Out", lbX + lbW/2, lbY + 15);
+        _journalLogoutBtnRect = { x: lbX, y: lbY, w: lbW, h: lbH };
+      }
+
+      // ── Confirm popup (drawn on top of everything) ─────────────────────
+      _journalLogoutYesRect = null;
+      _journalLogoutNoRect  = null;
+      if (_journalLogoutConfirm) {
+        const pw = 220, ph = 110;
+        const px = canvas.width/2 - pw/2, py = canvas.height/2 - ph/2;
+        // Backdrop
+        ctx.fillStyle = "rgba(0,0,0,0.55)";
+        ctx.fillRect(20, 28, 736, 520);
+        // Card
+        ctx.fillStyle = "#f0e8d0"; ctx.fillRect(px, py, pw, ph);
+        ctx.strokeStyle = "#8a4020"; ctx.lineWidth = 1.5;
+        ctx.strokeRect(px+0.5, py+0.5, pw-1, ph-1);
+        // Header stripe
+        ctx.fillStyle = "#3a0c06"; ctx.fillRect(px, py, pw, 28);
+        ctx.fillStyle = "#f08060"; ctx.font = "bold 10px Georgia, serif"; ctx.textAlign = "center";
+        ctx.fillText("LOG OUT", px + pw/2, py + 18);
+        // Message
+        ctx.fillStyle = "#3a2010"; ctx.font = "11px Georgia, serif";
+        ctx.fillText("Are you sure you want to log out?", px + pw/2, py + 50);
+        ctx.fillStyle = "#7a4020"; ctx.font = "italic 9px Georgia, serif";
+        ctx.fillText(activeProfile ? activeProfile.username : "", px + pw/2, py + 64);
+        // Buttons
+        const btnY = py + ph - 30, btnH = 22;
+        const noX  = px + 20,  noW  = 80;
+        const yesX = px + pw - 100, yesW = 80;
+        // NO
+        ctx.fillStyle = "#d8cdb8"; ctx.fillRect(noX, btnY, noW, btnH);
+        ctx.strokeStyle = "#8a7050"; ctx.lineWidth = 1; ctx.strokeRect(noX+0.5, btnY+0.5, noW-1, btnH-1);
+        ctx.fillStyle = "#3a2010"; ctx.font = "bold 9px Georgia, serif";
+        ctx.fillText("Cancel", noX + noW/2, btnY + 14);
+        _journalLogoutNoRect = { x: noX, y: btnY, w: noW, h: btnH };
+        // YES
+        ctx.fillStyle = "#8a1a0a"; ctx.fillRect(yesX, btnY, yesW, btnH);
+        ctx.strokeStyle = "#c04020"; ctx.lineWidth = 1; ctx.strokeRect(yesX+0.5, btnY+0.5, yesW-1, btnH-1);
+        ctx.fillStyle = "#f0b090"; ctx.font = "bold 9px Georgia, serif";
+        ctx.fillText("Log Out", yesX + yesW/2, btnY + 14);
+        _journalLogoutYesRect = { x: yesX, y: btnY, w: yesW, h: btnH };
+        ctx.textAlign = "left";
+      }
+
       // ── Bottom hints ──────────────────────────────────────────────────────
       ctx.textAlign = "center"; ctx.font = "italic 10px Georgia, serif"; ctx.fillStyle = "#8a7050";
       ctx.fillText("[ J ] close", lx + lw / 2, jy + jh - 10);
@@ -7058,6 +7284,25 @@
       { name: "Motion Sensor",      role: "Ghost Tracking",hint: "Cover doorways or corridors between you and the ghost." },
       { name: "Head Gear",          role: "Van Feed",      hint: "Wear during the investigation for a live van camera feed." },
     ];
+
+    // ── Default truck loadout ────────────────────────────────────────────────
+    // One entry per core evidence-finding item.  qty=1, level=1.
+    // Everything not listed here defaults to 0 (not loaded into the truck).
+    // This is the single source of truth for the baseline loadout.
+    // To change defaults later: edit this array only.
+    const DEFAULT_TRUCK_LOADOUT = [
+      { name: "Flashlight",         qty: 1, level: 1 },
+      { name: "EMF Reader",         qty: 1, level: 1 },
+      { name: "Thermometer",        qty: 1, level: 1 },
+      { name: "D.O.T.S. Projector", qty: 1, level: 1 },
+      { name: "Ghost Book",         qty: 1, level: 1 },
+      { name: "Spirit Box",         qty: 1, level: 1 },
+      { name: "UV Flashlight",      qty: 1, level: 1 },
+      { name: "Video Camera",       qty: 1, level: 1 },
+    ];
+    // Seed _roundLoadout with a fresh copy of the defaults.
+    // Player changes mutate _roundLoadout; this line only runs once at startup.
+    _roundLoadout = DEFAULT_TRUCK_LOADOUT.map(e => ({ ...e }));
 
     // Shop catalog — all browseable equipment items (non-cursed)
     // Add more entries here as items are implemented.
@@ -7476,128 +7721,66 @@
         }
 
       } else if (_truckTab === "truck") {
-        // ── TRUCK TAB — amber/warm palette to distinguish from Shop (blue/teal) ──
-        const T_ACCENT   = "#b86c10";   // amber accent line
-        const T_ACTIVE   = "#c87820";   // warm gold for selected state
-        const T_DIM      = "#5a3810";   // dim amber for inactive text
-        const T_BRIGHT   = "#f0c060";   // bright gold for selected text / headers
-        const T_BG       = "#100c06";   // warm near-black background
-        const T_ROW_SEL  = "rgba(180,100,20,0.18)";
-        const T_ROW_HOV  = "rgba(140,80,10,0.10)";
-        const T_ROW_ALT  = "rgba(255,200,100,0.015)";
+        // ── TRUCK TAB — list LEFT, preview RIGHT ─────────────────────────────
+        const T_ACTIVE  = "#c87820";
+        const T_DIM     = "#5a3810";
+        const T_BRIGHT  = "#f0c060";
+        const T_ROW_SEL = "rgba(180,100,20,0.18)";
+        const T_ROW_HOV = "rgba(140,80,10,0.10)";
+        const T_ROW_ALT = "rgba(255,200,100,0.015)";
 
-        const PREV_W = 172;
-        const LIST_X = CONT_X + PREV_W + 1;
-        const LIST_W = CONT_W - PREV_W - 1;
-        const tsel   = TRUCK_CATALOG[_truckSelItem];
+        // Column split: list ~58%, preview ~42%
+        const PREV_W  = Math.floor(CONT_W * 0.42);
+        const LIST_W  = CONT_W - PREV_W - 1;
+        const LIST_X  = CONT_X;
+        const PREV_X  = CONT_X + LIST_W + 1;
+        const tsel    = TRUCK_CATALOG[_truckSelItem];
+        const MAX_QTY = 4; // max stars
 
-        // ── Left: item detail panel (NEXT ROUND LOADOUT) ──
-        const ICON_SZ = 90;
-        const iconX   = CONT_X + PREV_W/2;
-        const iconY   = BODY_Y + 12 + ICON_SZ/2;
-
-        // Icon box
-        ctx.fillStyle = "#0e0906";
-        ctx.fillRect(CONT_X + (PREV_W - ICON_SZ)/2, BODY_Y + 12, ICON_SZ, ICON_SZ);
-        ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 1;
-        ctx.strokeRect(CONT_X + (PREV_W - ICON_SZ)/2 + 0.5, BODY_Y + 12.5, ICON_SZ - 1, ICON_SZ - 1);
-        ctx.save();
-        ctx.beginPath(); ctx.rect(CONT_X + (PREV_W - ICON_SZ)/2, BODY_Y + 12, ICON_SZ, ICON_SZ); ctx.clip();
-        _drawShopItemIcon(tsel.name, iconX, iconY, 0.75);
-        ctx.restore();
-
-        // Item name + role badge
-        const tnameY = BODY_Y + 12 + ICON_SZ + 11;
-        ctx.textAlign = "center"; ctx.fillStyle = T_BRIGHT; ctx.font = "bold 10px monospace";
-        ctx.fillText(tsel.name, CONT_X + PREV_W/2, tnameY);
-        ctx.fillStyle = "#2a1a06"; ctx.fillRect(CONT_X + 10, tnameY + 4, PREV_W - 20, 12);
-        ctx.strokeStyle = "#4a2a08"; ctx.lineWidth = 0.5;
-        ctx.strokeRect(CONT_X + 10.5, tnameY + 4.5, PREV_W - 21, 11);
-        ctx.fillStyle = "#a06020"; ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
-        ctx.fillText(tsel.role.toUpperCase(), CONT_X + PREV_W/2, tnameY + 13);
-
-        // ── Round config: QTY + LEVEL placeholders ──
-        const cfgY = tnameY + 22;
-        // QTY row
-        ctx.fillStyle = "#100a04"; ctx.fillRect(CONT_X + 8, cfgY, PREV_W - 16, 22);
-        ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.5;
-        ctx.strokeRect(CONT_X + 8.5, cfgY + 0.5, PREV_W - 17, 21);
-        ctx.fillStyle = T_DIM; ctx.font = "bold 7px monospace"; ctx.textAlign = "left";
-        ctx.fillText("QTY", CONT_X + 13, cfgY + 14);
-        ctx.fillStyle = "#2a1408"; ctx.font = "7px monospace"; ctx.textAlign = "right";
-        ctx.fillText("1  ◄ ►", CONT_X + PREV_W - 13, cfgY + 14);
-        // LEVEL row
-        ctx.fillStyle = "#100a04"; ctx.fillRect(CONT_X + 8, cfgY + 24, PREV_W - 16, 22);
-        ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.5;
-        ctx.strokeRect(CONT_X + 8.5, cfgY + 24.5, PREV_W - 17, 21);
-        ctx.fillStyle = T_DIM; ctx.font = "bold 7px monospace"; ctx.textAlign = "left";
-        ctx.fillText("LEVEL", CONT_X + 13, cfgY + 38);
-        ctx.fillStyle = "#2a1408"; ctx.font = "7px monospace"; ctx.textAlign = "right";
-        ctx.fillText("1  ◄ ►", CONT_X + PREV_W - 13, cfgY + 38);
-
-        // ADD TO ROUND button
-        const addBtnY = cfgY + 52;
-        ctx.fillStyle = "#1e1208"; ctx.fillRect(CONT_X + 8, addBtnY, PREV_W - 16, 20);
-        ctx.strokeStyle = "#5a3010"; ctx.lineWidth = 0.5;
-        ctx.strokeRect(CONT_X + 8.5, addBtnY + 0.5, PREV_W - 17, 19);
-        ctx.fillStyle = "#6a4018"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
-        ctx.fillText("+ ADD TO ROUND", CONT_X + PREV_W/2, addBtnY + 13);
-
-        // Hint text — word-wrap
-        const thintY = addBtnY + 28;
-        const tmaxW  = PREV_W - 14;
-        ctx.fillStyle = "#5a3818"; ctx.font = "8px monospace"; ctx.textAlign = "left";
-        const thWords = ("TIP: " + tsel.hint).split(" ");
-        let tLine = "", tLineY = thintY;
-        for (const w of thWords) {
-          const test = tLine ? tLine + " " + w : w;
-          if (ctx.measureText(test).width > tmaxW && tLine) {
-            ctx.fillText(tLine, CONT_X + 7, tLineY); tLine = w; tLineY += 12;
-          } else { tLine = test; }
-        }
-        if (tLine) ctx.fillText(tLine, CONT_X + 7, tLineY);
-
-        // Vertical divider
-        ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(LIST_X, BODY_Y); ctx.lineTo(LIST_X, BODY_Y + BODY_H); ctx.stroke();
-
-        // ── Right: scrollable item list ──
-        const ROW_H  = 26;
-        const TVIS   = Math.floor(BODY_H / ROW_H);
+        // ── LEFT: scrollable item list ────────────────────────────────────────
+        const THDR   = 22;
+        const ROW_H  = 30;
+        const TVIS   = Math.floor((BODY_H - THDR) / ROW_H);
         _truckListScroll = Math.max(0, Math.min(_truckListScroll, TRUCK_CATALOG.length - TVIS));
         _truckItemRects  = [];
+        _truckRowRects   = [];
 
-        // Header — two rows: loadout status + catalog label
-        const THDR = 32;
-        ctx.fillStyle = "#100a04"; ctx.fillRect(LIST_X, BODY_Y, LIST_W, THDR);
-        ctx.fillStyle = "#140e06"; ctx.fillRect(LIST_X, BODY_Y, LIST_W, 16);
-        ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.5;
-        ctx.beginPath(); ctx.moveTo(LIST_X, BODY_Y + 16); ctx.lineTo(LIST_X + LIST_W, BODY_Y + 16); ctx.stroke();
+        // List header
+        ctx.fillStyle = "#0e0a04"; ctx.fillRect(LIST_X, BODY_Y, LIST_W, THDR);
         ctx.fillStyle = "#4a2808"; ctx.font = "bold 8px monospace"; ctx.textAlign = "left";
-        ctx.fillText("NEXT ROUND LOADOUT", LIST_X + 10, BODY_Y + 11);
-        ctx.fillStyle = "#3a1a04"; ctx.font = "bold 9px monospace"; ctx.textAlign = "right";
-        ctx.fillText("0 / 3 SELECTED", LIST_X + LIST_W - 10, BODY_Y + 11);
-        ctx.fillStyle = "#4a3010"; ctx.font = "bold 8px monospace"; ctx.textAlign = "left";
-        ctx.fillText("SELECT ITEMS TO BRING", LIST_X + 10, BODY_Y + 27);
-        ctx.textAlign = "right"; ctx.fillStyle = "#2a1808"; ctx.font = "8px monospace";
-        ctx.fillText((_truckListScroll + 1) + "–" + Math.min(_truckListScroll + TVIS, TRUCK_CATALOG.length) + " / " + TRUCK_CATALOG.length, LIST_X + LIST_W - 8, BODY_Y + 27);
+        ctx.fillText("NEXT ROUND LOADOUT", LIST_X + 8, BODY_Y + 14);
+        ctx.fillStyle = _roundLoadout.length > 0 ? "#c87820" : "#3a1a04";
+        ctx.font = "bold 8px monospace"; ctx.textAlign = "right";
+        ctx.fillText(_roundLoadout.length + " ITEMS", LIST_X + LIST_W - 8, BODY_Y + 14);
         ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.5;
         ctx.beginPath(); ctx.moveTo(LIST_X, BODY_Y + THDR); ctx.lineTo(LIST_X + LIST_W, BODY_Y + THDR); ctx.stroke();
 
-        const TROW_Y0 = BODY_Y + THDR + 2;
+        const TROW_Y0 = BODY_Y + THDR;
         ctx.save();
-        ctx.beginPath(); ctx.rect(LIST_X, TROW_Y0, LIST_W, BODY_H - THDR - 2); ctx.clip();
+        ctx.beginPath(); ctx.rect(LIST_X, TROW_Y0, LIST_W, BODY_H - THDR); ctx.clip();
+
+        // Column layout within each row:
+        //  [8px pad] [item name ~40%] [− 14px] [★★★★ ~20%] [+ 14px] [I II III ~24%] [8px pad]
+        const NAME_W  = Math.floor(LIST_W * 0.35);
+        const CTRL_X  = LIST_X + 8 + NAME_W + 4; // start of − button
+        const BTN_W   = 16;
+        const STAR_W  = Math.floor(LIST_W * 0.18);
+        const LVL_W   = Math.floor(LIST_W * 0.22);
+        const LVL_X   = LIST_X + LIST_W - 8 - LVL_W; // right-aligned level group
+
         for (let vi = 0; vi < TVIS; vi++) {
-          const ci = _truckListScroll + vi;
+          const ci    = _truckListScroll + vi;
           if (ci >= TRUCK_CATALOG.length) break;
-          const entry  = TRUCK_CATALOG[ci];
-          const ry     = TROW_Y0 + vi * ROW_H;
-          const isSel  = ci === _truckSelItem;
-          const isHov  = !isSel && _titleMx >= LIST_X && _titleMx <= LIST_X + LIST_W
-                         && _titleMy >= ry && _titleMy <= ry + ROW_H;
+          const entry = TRUCK_CATALOG[ci];
+          const ry    = TROW_Y0 + vi * ROW_H;
+          const isSel = ci === _truckSelItem;
+          const isHov = !isSel && _titleMx >= LIST_X && _titleMx <= LIST_X + LIST_W
+                        && _titleMy >= ry && _titleMy <= ry + ROW_H;
+          const rle   = _roundLoadout.find(e => e.name === entry.name);
+          const qty   = rle ? rle.qty : 0;
+          const lvl   = rle ? rle.level : 1;
 
-          _truckItemRects.push({ idx: ci, x: LIST_X, y: ry, w: LIST_W, h: ROW_H });
-
+          // Row background
           if (isSel) {
             ctx.fillStyle = T_ROW_SEL; ctx.fillRect(LIST_X, ry, LIST_W, ROW_H - 1);
             ctx.fillStyle = T_ACTIVE;  ctx.fillRect(LIST_X, ry, 3, ROW_H - 1);
@@ -7606,122 +7789,193 @@
           } else if (vi % 2 === 0) {
             ctx.fillStyle = T_ROW_ALT; ctx.fillRect(LIST_X, ry, LIST_W, ROW_H - 1);
           }
+          if (qty > 0) { ctx.fillStyle = "#4a8010"; ctx.fillRect(LIST_X, ry, 3, ROW_H - 1); }
+
           // Row divider
           ctx.strokeStyle = "#1a0e04"; ctx.lineWidth = 0.5;
-          ctx.beginPath(); ctx.moveTo(LIST_X + 6, ry + ROW_H - 1); ctx.lineTo(LIST_X + LIST_W - 6, ry + ROW_H - 1); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(LIST_X + 4, ry + ROW_H - 1); ctx.lineTo(LIST_X + LIST_W - 4, ry + ROW_H - 1); ctx.stroke();
 
-          const ty = ry + 17;
+          const mid = ry + ROW_H / 2;
+
+          // Item name (clicking anywhere on the name area selects the row)
+          ctx.fillStyle = isSel ? T_BRIGHT : (qty > 0 ? "#90c040" : (isHov ? "#806030" : T_DIM));
+          ctx.font = (isSel || qty > 0 ? "bold " : "") + "9px monospace";
           ctx.textAlign = "left";
-          ctx.fillStyle = isSel ? T_BRIGHT : (isHov ? "#806030" : T_DIM);
-          ctx.font = (isSel ? "bold " : "") + "10px monospace";
-          ctx.fillText(entry.name, LIST_X + 12, ty);
-          // Role tag (right side)
-          ctx.fillStyle = isSel ? "#7a4820" : "#2a1808"; ctx.font = "7px monospace"; ctx.textAlign = "right";
-          ctx.fillText(entry.role, LIST_X + LIST_W - 16, ty);
+          // Clip name to NAME_W
+          ctx.save();
+          ctx.beginPath(); ctx.rect(LIST_X + 8, ry, NAME_W, ROW_H); ctx.clip();
+          ctx.fillText(entry.name, LIST_X + 8, mid + 4);
+          ctx.restore();
+          _truckItemRects.push({ idx: ci, x: LIST_X, y: ry, w: NAME_W + 12, h: ROW_H });
+
+          // ─ minus button
+          const minX = CTRL_X;
+          const minHov = _titleMx >= minX && _titleMx <= minX + BTN_W && _titleMy >= ry && _titleMy <= ry + ROW_H;
+          ctx.fillStyle = minHov ? "#3a1808" : "#200e04";
+          ctx.fillRect(minX, ry + 6, BTN_W, ROW_H - 12);
+          ctx.strokeStyle = qty > 0 ? "#7a3010" : "#2a1408"; ctx.lineWidth = 0.5;
+          ctx.strokeRect(minX + 0.5, ry + 6.5, BTN_W - 1, ROW_H - 13);
+          ctx.fillStyle = qty > 0 ? "#e08020" : "#3a1a08";
+          ctx.font = "bold 11px monospace"; ctx.textAlign = "center";
+          ctx.fillText("−", minX + BTN_W / 2, mid + 4);
+          _truckRowRects.push({ idx: ci, type: "minus", x: minX, y: ry + 6, w: BTN_W, h: ROW_H - 12 });
+
+          // ★ stars (between minus and plus)
+          const starAreaX = minX + BTN_W + 3;
+          const starAreaW = STAR_W;
+          ctx.font = "10px monospace"; ctx.textAlign = "left";
+          let sx = starAreaX;
+          const starSpacing = Math.floor(starAreaW / MAX_QTY);
+          for (let s = 0; s < MAX_QTY; s++) {
+            ctx.fillStyle = s < qty ? "#e0a020" : "#2a1a06";
+            ctx.fillText(s < qty ? "★" : "☆", sx, mid + 4);
+            sx += starSpacing;
+          }
+
+          // + plus button
+          const plusX = starAreaX + starAreaW + 2;
+          const plusHov = _titleMx >= plusX && _titleMx <= plusX + BTN_W && _titleMy >= ry && _titleMy <= ry + ROW_H;
+          ctx.fillStyle = plusHov ? "#1a2808" : "#0e180a";
+          ctx.fillRect(plusX, ry + 6, BTN_W, ROW_H - 12);
+          ctx.strokeStyle = qty < MAX_QTY ? "#3a7010" : "#2a1408"; ctx.lineWidth = 0.5;
+          ctx.strokeRect(plusX + 0.5, ry + 6.5, BTN_W - 1, ROW_H - 13);
+          ctx.fillStyle = qty < MAX_QTY ? "#70c020" : "#2a3010";
+          ctx.font = "bold 11px monospace"; ctx.textAlign = "center";
+          ctx.fillText("+", plusX + BTN_W / 2, mid + 4);
+          _truckRowRects.push({ idx: ci, type: "plus", x: plusX, y: ry + 6, w: BTN_W, h: ROW_H - 12 });
+
+          // I / II / III level selector
+          const lvlLabels = ["I", "II", "III"];
+          const lvlSlotW  = Math.floor(LVL_W / 3);
+          for (let li = 0; li < 3; li++) {
+            const lx     = LVL_X + li * lvlSlotW;
+            const isAct  = lvl === li + 1;
+            const lhov   = !isAct && _titleMx >= lx && _titleMx <= lx + lvlSlotW && _titleMy >= ry + 5 && _titleMy <= ry + ROW_H - 5;
+            ctx.fillStyle = isAct ? "#2a1a04" : (lhov ? "#1a1206" : "transparent");
+            if (isAct || lhov) ctx.fillRect(lx, ry + 5, lvlSlotW - 1, ROW_H - 10);
+            ctx.strokeStyle = isAct ? "#c87820" : "#2a1408"; ctx.lineWidth = 0.5;
+            if (isAct) ctx.strokeRect(lx + 0.5, ry + 5.5, lvlSlotW - 2, ROW_H - 11);
+            ctx.fillStyle = isAct ? T_BRIGHT : (qty > 0 ? "#5a3810" : "#2a1408");
+            ctx.font = (isAct ? "bold " : "") + "8px monospace"; ctx.textAlign = "center";
+            ctx.fillText(lvlLabels[li], lx + lvlSlotW / 2, mid + 3);
+            _truckRowRects.push({ idx: ci, type: "lvl", lvl: li + 1, x: lx, y: ry + 5, w: lvlSlotW - 1, h: ROW_H - 10 });
+          }
         }
         ctx.restore();
 
         // Scrollbar
         if (TRUCK_CATALOG.length > TVIS) {
-          const sbH    = BODY_H - THDR - 2;
-          const thumbH = Math.max(20, sbH * TVIS / TRUCK_CATALOG.length);
+          const sbH    = BODY_H - THDR;
+          const thumbH = Math.max(16, sbH * TVIS / TRUCK_CATALOG.length);
           const thumbY = TROW_Y0 + (_truckListScroll / (TRUCK_CATALOG.length - TVIS)) * (sbH - thumbH);
-          ctx.fillStyle = "#0e0804"; ctx.fillRect(LIST_X + LIST_W - 6, TROW_Y0, 6, sbH);
-          ctx.fillStyle = "#4a2808"; ctx.fillRect(LIST_X + LIST_W - 5, thumbY, 4, thumbH);
-        }
-      } else if (_truckTab === "layout") {
-        // ── LAYOUT TAB — mirrors Truck tab structure; diverge here later ──
-        const L_ACCENT   = "#b86c10";
-        const L_ACTIVE   = "#c87820";
-        const L_DIM      = "#5a3810";
-        const L_BRIGHT   = "#f0c060";
-        const L_ROW_SEL  = "rgba(180,100,20,0.18)";
-        const L_ROW_HOV  = "rgba(140,80,10,0.10)";
-        const L_ROW_ALT  = "rgba(255,200,100,0.015)";
-
-        const PREV_W = 172;
-        const LIST_X = CONT_X + PREV_W + 1;
-        const LIST_W = CONT_W - PREV_W - 1;
-        const lsel   = TRUCK_CATALOG[_layoutSelItem];
-
-        // ── Left: preset slots panel ──
-        // Header
-        ctx.fillStyle = "#0c0804"; ctx.fillRect(CONT_X, BODY_Y, PREV_W, 22);
-        ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.5;
-        ctx.beginPath(); ctx.moveTo(CONT_X, BODY_Y + 22); ctx.lineTo(CONT_X + PREV_W, BODY_Y + 22); ctx.stroke();
-        ctx.fillStyle = "#2a1806"; ctx.fillRect(CONT_X, BODY_Y, 3, 22);
-        ctx.textAlign = "left"; ctx.fillStyle = L_BRIGHT; ctx.font = "bold 8px monospace";
-        ctx.fillText("SAVED PRESETS", CONT_X + 10, BODY_Y + 14);
-        ctx.fillStyle = L_DIM; ctx.font = "7px monospace"; ctx.textAlign = "right";
-        ctx.fillText("0 / 3 SAVED", CONT_X + PREV_W - 8, BODY_Y + 14);
-
-        // 3 preset slots
-        const SLOT_H = 52, SLOT_GAP = 6, SLOT_Y0 = BODY_Y + 28;
-        const PRESET_LABELS = ["PRESET A", "PRESET B", "PRESET C"];
-        for (let pi = 0; pi < 3; pi++) {
-          const sy = SLOT_Y0 + pi * (SLOT_H + SLOT_GAP);
-          ctx.fillStyle = "#0e0a06"; ctx.fillRect(CONT_X + 8, sy, PREV_W - 16, SLOT_H);
-          ctx.strokeStyle = "#2a1808"; ctx.lineWidth = 0.5;
-          ctx.strokeRect(CONT_X + 8.5, sy + 0.5, PREV_W - 17, SLOT_H - 1);
-          ctx.fillStyle = "#1a0e06"; ctx.fillRect(CONT_X + 8, sy, PREV_W - 16, 14);
-          ctx.fillStyle = L_DIM; ctx.font = "bold 7px monospace"; ctx.textAlign = "left";
-          ctx.fillText(PRESET_LABELS[pi], CONT_X + 13, sy + 10);
-          ctx.fillStyle = "#2a1406"; ctx.font = "7px monospace"; ctx.textAlign = "right";
-          ctx.fillText("EMPTY", CONT_X + PREV_W - 13, sy + 10);
-          for (let di = 0; di < 3; di++) {
-            const dx = CONT_X + 18 + di * ((PREV_W - 36) / 3) + (PREV_W - 36) / 6;
-            const dy = sy + 33;
-            ctx.fillStyle = "#150d04"; ctx.beginPath(); ctx.arc(dx, dy, 9, 0, Math.PI*2); ctx.fill();
-            ctx.strokeStyle = "#2a1808"; ctx.lineWidth = 0.5;
-            ctx.beginPath(); ctx.arc(dx, dy, 9, 0, Math.PI*2); ctx.stroke();
-            ctx.fillStyle = "#2a1406"; ctx.font = "7px monospace"; ctx.textAlign = "center";
-            ctx.fillText((di+1).toString(), dx, dy + 3);
-          }
+          ctx.fillStyle = "#0e0804"; ctx.fillRect(LIST_X + LIST_W - 5, TROW_Y0, 5, sbH);
+          ctx.fillStyle = "#4a2808"; ctx.fillRect(LIST_X + LIST_W - 4, thumbY, 3, thumbH);
         }
 
-        // SAVE CURRENT ROUND button
-        const saveBtnY = SLOT_Y0 + 3 * (SLOT_H + SLOT_GAP) + 4;
-        ctx.fillStyle = "#1a1006"; ctx.fillRect(CONT_X + 8, saveBtnY, PREV_W - 16, 20);
-        ctx.strokeStyle = "#4a2a08"; ctx.lineWidth = 0.5;
-        ctx.strokeRect(CONT_X + 8.5, saveBtnY + 0.5, PREV_W - 17, 19);
-        ctx.fillStyle = "#4a3010"; ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
-        ctx.fillText("SAVE ROUND AS PRESET", CONT_X + PREV_W/2, saveBtnY + 13);
-
+        // Vertical divider
         ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(LIST_X, BODY_Y); ctx.lineTo(LIST_X, BODY_Y + BODY_H); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(PREV_X, BODY_Y); ctx.lineTo(PREV_X, BODY_Y + BODY_H); ctx.stroke();
 
-        // ── Right: scrollable item list ──
-        const ROW_H  = 26;
-        const LVIS   = Math.floor(BODY_H / ROW_H);
-        _layoutListScroll = Math.max(0, Math.min(_layoutListScroll, Math.max(0, TRUCK_CATALOG.length - LVIS)));
-        _layoutItemRects  = [];
+        // ── RIGHT: selected item image + description ──────────────────────────
+        const PX = PREV_X + 1;
+        const PW = PREV_W - 1;
 
-        const LHDR = 32;
-        ctx.fillStyle = "#100a04"; ctx.fillRect(LIST_X, BODY_Y, LIST_W, LHDR);
-        ctx.fillStyle = "#140e06"; ctx.fillRect(LIST_X, BODY_Y, LIST_W, 16);
-        ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.5;
-        ctx.beginPath(); ctx.moveTo(LIST_X, BODY_Y + 16); ctx.lineTo(LIST_X + LIST_W, BODY_Y + 16); ctx.stroke();
-        ctx.fillStyle = "#4a2808"; ctx.font = "bold 8px monospace"; ctx.textAlign = "left";
-        ctx.fillText("PRESET BUILDER", LIST_X + 10, BODY_Y + 11);
-        ctx.fillStyle = "#4a3010"; ctx.font = "bold 8px monospace"; ctx.textAlign = "left";
-        ctx.fillText("AVAILABLE EQUIPMENT", LIST_X + 10, BODY_Y + 27);
-        ctx.textAlign = "right"; ctx.fillStyle = "#2a1808"; ctx.font = "8px monospace";
-        ctx.fillText((_layoutListScroll + 1) + "\u2013" + Math.min(_layoutListScroll + LVIS, TRUCK_CATALOG.length) + " / " + TRUCK_CATALOG.length, LIST_X + LIST_W - 8, BODY_Y + 27);
-        ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.5;
-        ctx.beginPath(); ctx.moveTo(LIST_X, BODY_Y + LHDR); ctx.lineTo(LIST_X + LIST_W, BODY_Y + LHDR); ctx.stroke();
-
-        const LROW_Y0 = BODY_Y + LHDR + 2;
+        // Icon
+        const ICON_SZ = Math.min(PW - 24, 90);
+        const iconX   = PX + PW / 2;
+        const iconY   = BODY_Y + 14 + ICON_SZ / 2;
+        ctx.fillStyle = "#0e0906";
+        ctx.fillRect(PX + (PW - ICON_SZ) / 2, BODY_Y + 14, ICON_SZ, ICON_SZ);
+        ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 1;
+        ctx.strokeRect(PX + (PW - ICON_SZ) / 2 + 0.5, BODY_Y + 14.5, ICON_SZ - 1, ICON_SZ - 1);
         ctx.save();
-        ctx.beginPath(); ctx.rect(LIST_X, LROW_Y0, LIST_W, BODY_H - LHDR - 2); ctx.clip();
-        for (let vi = 0; vi < LVIS; vi++) {
-          const ci = _layoutListScroll + vi;
+        ctx.beginPath(); ctx.rect(PX + (PW - ICON_SZ) / 2, BODY_Y + 14, ICON_SZ, ICON_SZ); ctx.clip();
+        _drawShopItemIcon(tsel.name, iconX, iconY, 0.75);
+        ctx.restore();
+
+        // Item name
+        const pnameY = BODY_Y + 14 + ICON_SZ + 12;
+        ctx.fillStyle = T_BRIGHT; ctx.font = "bold 10px monospace"; ctx.textAlign = "center";
+        ctx.fillText(tsel.name, PX + PW / 2, pnameY);
+
+        // Role badge
+        ctx.fillStyle = "#2a1a06"; ctx.fillRect(PX + 8, pnameY + 4, PW - 16, 13);
+        ctx.strokeStyle = "#4a2a08"; ctx.lineWidth = 0.5;
+        ctx.strokeRect(PX + 8.5, pnameY + 4.5, PW - 17, 12);
+        ctx.fillStyle = "#a06020"; ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
+        ctx.fillText(tsel.role.toUpperCase(), PX + PW / 2, pnameY + 13);
+
+        // Description / hint — word-wrapped
+        const descY  = pnameY + 24;
+        const descMaxW = PW - 16;
+        ctx.fillStyle = "#7a5030"; ctx.font = "8px monospace"; ctx.textAlign = "left";
+        const words = tsel.hint.split(" ");
+        let line = "", lineY = descY;
+        for (const w of words) {
+          const test = line ? line + " " + w : w;
+          if (ctx.measureText(test).width > descMaxW && line) {
+            ctx.fillText(line, PX + 8, lineY); line = w; lineY += 12;
+          } else { line = test; }
+        }
+        if (line) ctx.fillText(line, PX + 8, lineY);
+      } else if (_truckTab === "layout") {
+        // ── LAYOUT TAB — preset loadout slots ───────────────────────────────
+        const L_ACTIVE  = "#c87820";
+        const L_DIM     = "#5a3810";
+        const L_BRIGHT  = "#f0c060";
+        const L_ROW_SEL = "rgba(180,100,20,0.18)";
+        const L_ROW_HOV = "rgba(140,80,10,0.10)";
+        const L_ROW_ALT = "rgba(255,200,100,0.015)";
+
+        const PREV_W  = Math.floor(CONT_W * 0.42);
+        const LIST_W  = CONT_W - PREV_W - 1;
+        const LIST_X  = CONT_X;
+        const PREV_X  = CONT_X + LIST_W + 1;
+        const MAX_QTY = 4;
+        const curPreset  = _layoutPresets[_layoutSlot];
+        const slotLabel  = ["A","B","C"][_layoutSlot];
+
+        // ── LEFT: scrollable item list ─────────────────────────────────────
+        const THDR  = 22;
+        const ROW_H = 30;
+        const TVIS  = Math.floor((BODY_H - THDR) / ROW_H);
+        _truckListScroll = Math.max(0, Math.min(_truckListScroll, Math.max(0, TRUCK_CATALOG.length - TVIS)));
+        _layoutRowRects  = [];
+        _truckItemRects  = [];
+
+        const itemCount = curPreset ? curPreset.length : 0;
+        ctx.fillStyle = "#0e0a04"; ctx.fillRect(LIST_X, BODY_Y, LIST_W, THDR);
+        ctx.fillStyle = "#4a2808"; ctx.font = "bold 8px monospace"; ctx.textAlign = "left";
+        ctx.fillText("PRESET " + slotLabel + " \u2014 EDIT LOADOUT", LIST_X + 8, BODY_Y + 14);
+        ctx.fillStyle = itemCount > 0 ? "#c87820" : "#3a1a04";
+        ctx.font = "bold 8px monospace"; ctx.textAlign = "right";
+        ctx.fillText(itemCount + " ITEMS", LIST_X + LIST_W - 8, BODY_Y + 14);
+        ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(LIST_X, BODY_Y + THDR); ctx.lineTo(LIST_X + LIST_W, BODY_Y + THDR); ctx.stroke();
+
+        const TROW_Y0 = BODY_Y + THDR;
+        ctx.save();
+        ctx.beginPath(); ctx.rect(LIST_X, TROW_Y0, LIST_W, BODY_H - THDR); ctx.clip();
+
+        const NAME_W = Math.floor(LIST_W * 0.35);
+        const CTRL_X = LIST_X + 8 + NAME_W + 4;
+        const BTN_W  = 16;
+        const STAR_W = Math.floor(LIST_W * 0.18);
+        const LVL_W  = Math.floor(LIST_W * 0.22);
+        const LVL_X  = LIST_X + LIST_W - 8 - LVL_W;
+
+        for (let vi = 0; vi < TVIS; vi++) {
+          const ci    = _truckListScroll + vi;
           if (ci >= TRUCK_CATALOG.length) break;
-          const entry  = TRUCK_CATALOG[ci];
-          const ry     = LROW_Y0 + vi * ROW_H;
-          const isSel  = ci === _layoutSelItem;
-          const isHov  = !isSel && _titleMx >= LIST_X && _titleMx <= LIST_X + LIST_W
-                         && _titleMy >= ry && _titleMy <= ry + ROW_H;
-          _layoutItemRects.push({ idx: ci, x: LIST_X, y: ry, w: LIST_W, h: ROW_H });
+          const entry = TRUCK_CATALOG[ci];
+          const ry    = TROW_Y0 + vi * ROW_H;
+          const isSel = ci === _truckSelItem;
+          const isHov = !isSel && _titleMx >= LIST_X && _titleMx <= LIST_X + LIST_W
+                        && _titleMy >= ry && _titleMy <= ry + ROW_H;
+          const rle   = curPreset ? curPreset.find(e => e.name === entry.name) : null;
+          const qty   = rle ? rle.qty : 0;
+          const lvl   = rle ? rle.level : 1;
+
           if (isSel) {
             ctx.fillStyle = L_ROW_SEL; ctx.fillRect(LIST_X, ry, LIST_W, ROW_H - 1);
             ctx.fillStyle = L_ACTIVE;  ctx.fillRect(LIST_X, ry, 3, ROW_H - 1);
@@ -7730,24 +7984,162 @@
           } else if (vi % 2 === 0) {
             ctx.fillStyle = L_ROW_ALT; ctx.fillRect(LIST_X, ry, LIST_W, ROW_H - 1);
           }
+          if (qty > 0) { ctx.fillStyle = "#4a8010"; ctx.fillRect(LIST_X, ry, 3, ROW_H - 1); }
+
           ctx.strokeStyle = "#1a0e04"; ctx.lineWidth = 0.5;
-          ctx.beginPath(); ctx.moveTo(LIST_X + 6, ry + ROW_H - 1); ctx.lineTo(LIST_X + LIST_W - 6, ry + ROW_H - 1); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(LIST_X + 4, ry + ROW_H - 1); ctx.lineTo(LIST_X + LIST_W - 4, ry + ROW_H - 1); ctx.stroke();
+
+          const mid = ry + ROW_H / 2;
+
+          ctx.fillStyle = isSel ? L_BRIGHT : (qty > 0 ? "#90c040" : (isHov ? "#806030" : L_DIM));
+          ctx.font = (isSel || qty > 0 ? "bold " : "") + "9px monospace";
           ctx.textAlign = "left";
-          ctx.fillStyle = isSel ? L_BRIGHT : (isHov ? "#806030" : L_DIM);
-          ctx.font = (isSel ? "bold " : "") + "10px monospace";
-          ctx.fillText(entry.name, LIST_X + 12, ry + 17);
-          ctx.fillStyle = isSel ? "#7a4820" : "#2a1808"; ctx.font = "7px monospace"; ctx.textAlign = "right";
-          ctx.fillText(entry.role, LIST_X + LIST_W - 16, ry + 17);
+          ctx.save();
+          ctx.beginPath(); ctx.rect(LIST_X + 8, ry, NAME_W, ROW_H); ctx.clip();
+          ctx.fillText(entry.name, LIST_X + 8, mid + 4);
+          ctx.restore();
+          _truckItemRects.push({ idx: ci, x: LIST_X, y: ry, w: NAME_W + 12, h: ROW_H });
+
+          // − button
+          const minX   = CTRL_X;
+          const minHov = _titleMx >= minX && _titleMx <= minX + BTN_W && _titleMy >= ry && _titleMy <= ry + ROW_H;
+          ctx.fillStyle = minHov ? "#3a1808" : "#200e04";
+          ctx.fillRect(minX, ry + 6, BTN_W, ROW_H - 12);
+          ctx.strokeStyle = qty > 0 ? "#7a3010" : "#2a1408"; ctx.lineWidth = 0.5;
+          ctx.strokeRect(minX + 0.5, ry + 6.5, BTN_W - 1, ROW_H - 13);
+          ctx.fillStyle = qty > 0 ? "#e08020" : "#3a1a08";
+          ctx.font = "bold 11px monospace"; ctx.textAlign = "center";
+          ctx.fillText("\u2212", minX + BTN_W / 2, mid + 4);
+          _layoutRowRects.push({ idx: ci, type: "minus", x: minX, y: ry + 6, w: BTN_W, h: ROW_H - 12 });
+
+          // ★ stars
+          const starAreaX = minX + BTN_W + 3;
+          ctx.font = "10px monospace"; ctx.textAlign = "left";
+          let lsx = starAreaX;
+          const starSpacing = Math.floor(STAR_W / MAX_QTY);
+          for (let s = 0; s < MAX_QTY; s++) {
+            ctx.fillStyle = s < qty ? "#e0a020" : "#2a1a06";
+            ctx.fillText(s < qty ? "\u2605" : "\u2606", lsx, mid + 4);
+            lsx += starSpacing;
+          }
+
+          // + button
+          const plusX   = starAreaX + STAR_W + 2;
+          const plusHov = _titleMx >= plusX && _titleMx <= plusX + BTN_W && _titleMy >= ry && _titleMy <= ry + ROW_H;
+          ctx.fillStyle = plusHov ? "#1a2808" : "#0e180a";
+          ctx.fillRect(plusX, ry + 6, BTN_W, ROW_H - 12);
+          ctx.strokeStyle = qty < MAX_QTY ? "#3a7010" : "#2a1408"; ctx.lineWidth = 0.5;
+          ctx.strokeRect(plusX + 0.5, ry + 6.5, BTN_W - 1, ROW_H - 13);
+          ctx.fillStyle = qty < MAX_QTY ? "#70c020" : "#2a3010";
+          ctx.font = "bold 11px monospace"; ctx.textAlign = "center";
+          ctx.fillText("+", plusX + BTN_W / 2, mid + 4);
+          _layoutRowRects.push({ idx: ci, type: "plus", x: plusX, y: ry + 6, w: BTN_W, h: ROW_H - 12 });
+
+          // I / II / III
+          const lvlLabels = ["I", "II", "III"];
+          const lvlSlotW  = Math.floor(LVL_W / 3);
+          for (let li = 0; li < 3; li++) {
+            const lx    = LVL_X + li * lvlSlotW;
+            const isAct = lvl === li + 1;
+            const lhov  = !isAct && _titleMx >= lx && _titleMx <= lx + lvlSlotW && _titleMy >= ry + 5 && _titleMy <= ry + ROW_H - 5;
+            ctx.fillStyle = isAct ? "#2a1a04" : (lhov ? "#1a1206" : "transparent");
+            if (isAct || lhov) ctx.fillRect(lx, ry + 5, lvlSlotW - 1, ROW_H - 10);
+            ctx.strokeStyle = isAct ? "#c87820" : "#2a1408"; ctx.lineWidth = 0.5;
+            if (isAct) ctx.strokeRect(lx + 0.5, ry + 5.5, lvlSlotW - 2, ROW_H - 11);
+            ctx.fillStyle = isAct ? L_BRIGHT : (qty > 0 ? "#5a3810" : "#2a1408");
+            ctx.font = (isAct ? "bold " : "") + "8px monospace"; ctx.textAlign = "center";
+            ctx.fillText(lvlLabels[li], lx + lvlSlotW / 2, mid + 3);
+            _layoutRowRects.push({ idx: ci, type: "lvl", lvl: li + 1, x: lx, y: ry + 5, w: lvlSlotW - 1, h: ROW_H - 10 });
+          }
         }
         ctx.restore();
 
-        if (TRUCK_CATALOG.length > LVIS) {
-          const sbH    = BODY_H - LHDR - 2;
-          const thumbH = Math.max(20, sbH * LVIS / TRUCK_CATALOG.length);
-          const thumbY = LROW_Y0 + (_layoutListScroll / Math.max(1, TRUCK_CATALOG.length - LVIS)) * (sbH - thumbH);
-          ctx.fillStyle = "#0e0804"; ctx.fillRect(LIST_X + LIST_W - 6, LROW_Y0, 6, sbH);
-          ctx.fillStyle = "#4a2808"; ctx.fillRect(LIST_X + LIST_W - 5, thumbY, 4, thumbH);
+        if (TRUCK_CATALOG.length > TVIS) {
+          const sbH    = BODY_H - THDR;
+          const thumbH = Math.max(16, sbH * TVIS / TRUCK_CATALOG.length);
+          const thumbY = TROW_Y0 + (_truckListScroll / (TRUCK_CATALOG.length - TVIS)) * (sbH - thumbH);
+          ctx.fillStyle = "#0e0804"; ctx.fillRect(LIST_X + LIST_W - 5, TROW_Y0, 5, sbH);
+          ctx.fillStyle = "#4a2808"; ctx.fillRect(LIST_X + LIST_W - 4, thumbY, 3, thumbH);
         }
+
+        // Vertical divider
+        ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(PREV_X, BODY_Y); ctx.lineTo(PREV_X, BODY_Y + BODY_H); ctx.stroke();
+
+        // ── RIGHT: preset slot selector + action buttons ───────────────────
+        const PX = PREV_X + 1;
+        const PW = PREV_W - 1;
+        _layoutSlotRects     = [];
+        _layoutSaveBtnRect   = null;
+        _layoutActiveBtnRect = null;
+
+        ctx.fillStyle = "#0e0a04"; ctx.fillRect(PX, BODY_Y, PW, THDR);
+        ctx.fillStyle = "#4a2808"; ctx.font = "bold 8px monospace"; ctx.textAlign = "left";
+        ctx.fillText("PRESET SLOTS", PX + 8, BODY_Y + 14);
+        ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(PX, BODY_Y + THDR); ctx.lineTo(PX + PW, BODY_Y + THDR); ctx.stroke();
+
+        // A / B / C slot buttons
+        const SLOT_Y     = BODY_Y + THDR + 8;
+        const SLOT_BTN_W = Math.floor((PW - 24) / 3);
+        const SLOT_BTN_H = 32;
+        for (let si = 0; si < 3; si++) {
+          const sx    = PX + 8 + si * (SLOT_BTN_W + 4);
+          const isAct = si === _layoutSlot;
+          ctx.fillStyle = isAct ? "#2a1804" : "#100a04";
+          ctx.fillRect(sx, SLOT_Y, SLOT_BTN_W, SLOT_BTN_H);
+          ctx.strokeStyle = isAct ? "#c87820" : "#3a1a08"; ctx.lineWidth = isAct ? 1 : 0.5;
+          ctx.strokeRect(sx + 0.5, SLOT_Y + 0.5, SLOT_BTN_W - 1, SLOT_BTN_H - 1);
+          ctx.textAlign = "center";
+          ctx.fillStyle = isAct ? L_BRIGHT : "#5a3010";
+          ctx.font = "bold 14px monospace";
+          ctx.fillText(["A","B","C"][si], sx + SLOT_BTN_W / 2, SLOT_Y + 20);
+          if (si === _layoutActive) {
+            ctx.fillStyle = "#70c020";
+            ctx.beginPath(); ctx.arc(sx + SLOT_BTN_W - 6, SLOT_Y + 6, 3, 0, Math.PI*2); ctx.fill();
+          }
+          const p = _layoutPresets[si];
+          ctx.fillStyle = p ? "#7a5020" : "#2a1408"; ctx.font = "6px monospace";
+          ctx.fillText(p ? p.length + " items" : "empty", sx + SLOT_BTN_W / 2, SLOT_Y + SLOT_BTN_H - 5);
+          _layoutSlotRects.push({ slot: si, x: sx, y: SLOT_Y, w: SLOT_BTN_W, h: SLOT_BTN_H });
+        }
+
+        // SAVE button
+        const saveY = SLOT_Y + SLOT_BTN_H + 10;
+        const savW  = PW - 16;
+        ctx.fillStyle = "#1a1206"; ctx.fillRect(PX + 8, saveY, savW, 24);
+        ctx.strokeStyle = "#6a3a10"; ctx.lineWidth = 0.5;
+        ctx.strokeRect(PX + 8.5, saveY + 0.5, savW - 1, 23);
+        ctx.fillStyle = "#b06020"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+        ctx.fillText("SAVE LOADOUT \u2192 PRESET " + slotLabel, PX + 8 + savW / 2, saveY + 15);
+        _layoutSaveBtnRect = { x: PX + 8, y: saveY, w: savW, h: 24 };
+
+        // LOAD AS ACTIVE button
+        const actY            = saveY + 30;
+        const isLoadedActive  = _layoutActive === _layoutSlot && curPreset !== null;
+        ctx.fillStyle = isLoadedActive ? "#0a1a06" : "#080e06";
+        ctx.fillRect(PX + 8, actY, savW, 24);
+        ctx.strokeStyle = isLoadedActive ? "#4a8010" : "#2a3808"; ctx.lineWidth = 0.5;
+        ctx.strokeRect(PX + 8.5, actY + 0.5, savW - 1, 23);
+        ctx.fillStyle = isLoadedActive ? "#90c040" : (curPreset ? "#3a6010" : "#2a1408");
+        ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+        ctx.fillText(isLoadedActive ? "\u2713 ACTIVE LOADOUT" : (curPreset ? "LOAD AS ACTIVE" : "SLOT EMPTY"), PX + 8 + savW / 2, actY + 15);
+        _layoutActiveBtnRect = { x: PX + 8, y: actY, w: savW, h: 24 };
+
+        // Active indicator line
+        const indY = actY + 32;
+        ctx.textAlign = "left"; ctx.fillStyle = "#2a1808"; ctx.font = "7px monospace";
+        if (_layoutActive >= 0 && _layoutPresets[_layoutActive]) {
+          ctx.fillText("Active: Preset " + ["A","B","C"][_layoutActive] + " (" + _layoutPresets[_layoutActive].length + " items)", PX + 8, indY);
+        } else {
+          ctx.fillText("Active: Default loadout", PX + 8, indY);
+        }
+
+        // Hint lines
+        ctx.fillStyle = "#2a1406"; ctx.font = "7px monospace";
+        const hintLines = ["Build a loadout for this slot,", "then LOAD it to use it when", "the round starts."];
+        let hintY = indY + 18;
+        for (const hl of hintLines) { ctx.fillText(hl, PX + 8, hintY); hintY += 11; }
       } else {
         // ── CHARACTER tab ──
         const cy2 = BODY_Y + BODY_H / 2;
@@ -7780,51 +8172,48 @@
     // ── Board content: XP / PROFILE / START (fullscreen) ───────────────────
     function _drawPageProfile(bx, by, bw, bh) {
       // Layout constants
-      const PAD   = 22;
-      const RIGHT_W = Math.floor(bw * 0.33);  // right column width (item list)
-      const LEFT_W  = bw - RIGHT_W - PAD;      // left+center area width
-      const SPLIT_X = bx + LEFT_W;             // x where right column starts
+      const PAD     = 20;
+      const RIGHT_W = Math.floor(bw * 0.35);   // right column — item list
+      const LEFT_W  = bw - RIGHT_W - PAD * 2;  // left area — polaroid + id card + button
+      const SPLIT_X = bx + LEFT_W + PAD;
 
-      // ── MAP DISPLAY — top-left area ──────────────────────────────────────────
+      // ── MAP DISPLAY — top-left area ────────────────────────────────────────
       const selectedMap = MAP_REGISTRY.find(m => m.id === _selectedMapId) || MAP_REGISTRY[0];
-      const PW = 120, PH = 140;  // polaroid size
-      const polX = bx + PAD, polY = by + PAD + 2;
+      const PW = 162, PH = 190;  // polaroid — noticeably larger
+      const polX = bx + PAD, polY = by + PAD + 4;
 
       // Polaroid frame
       ctx.fillStyle = "rgba(0,0,0,0.30)";
-      ctx.fillRect(polX + 3, polY + 4, PW, PH);
+      ctx.fillRect(polX + 4, polY + 5, PW, PH);
       ctx.fillStyle = "#f5f0e0";
       ctx.fillRect(polX, polY, PW, PH);
-      const IMG_H = PH - 30;
-      _drawPolaroidThumbnail(polX + 5, polY + 5, PW - 10, IMG_H, selectedMap.playable);
+      const IMG_H = PH - 38;
+      _drawPolaroidThumbnail(polX + 6, polY + 6, PW - 12, IMG_H, selectedMap.playable);
       ctx.fillStyle = "#e8dfc8";
-      ctx.fillRect(polX + 5, polY + 5 + IMG_H, PW - 10, PH - IMG_H - 10);
-      ctx.fillStyle = "#3a2810"; ctx.font = "bold 7px Georgia, serif"; ctx.textAlign = "center";
-      ctx.fillText(selectedMap.name, polX + PW/2, polY + PH - 8);
+      ctx.fillRect(polX + 6, polY + 6 + IMG_H, PW - 12, PH - IMG_H - 12);
+      ctx.fillStyle = "#3a2810"; ctx.font = "bold 10px Georgia, serif"; ctx.textAlign = "center";
+      ctx.fillText(selectedMap.name, polX + PW/2, polY + PH - 10);
       ctx.textAlign = "left";
-      // Thumbtack
       _drawBlueThumbtack(polX + PW/2, polY - 2);
 
       // Map name large text to the right of polaroid
-      const mapNameX = polX + PW + 16;
-      const mapNameY = polY + 28;
-      ctx.fillStyle = "rgba(0,0,0,0.18)"; ctx.font = "bold 20px Georgia, serif";
+      const mapNameX = polX + PW + 20;
+      const mapNameY = polY + 36;
+      ctx.fillStyle = "rgba(0,0,0,0.18)"; ctx.font = "bold 28px Georgia, serif";
       ctx.fillText(selectedMap.name, mapNameX + 1, mapNameY + 1);
-      ctx.fillStyle = "#2a1808"; ctx.font = "bold 20px Georgia, serif";
+      ctx.fillStyle = "#2a1808"; ctx.font = "bold 28px Georgia, serif";
       ctx.fillText(selectedMap.name, mapNameX, mapNameY);
-      ctx.fillStyle = "#7a5830"; ctx.font = "10px Georgia, serif";
-      ctx.fillText(selectedMap.sub, mapNameX, mapNameY + 18);
-      // Decorative underline
+      ctx.fillStyle = "#7a5830"; ctx.font = "13px Georgia, serif";
+      ctx.fillText(selectedMap.sub, mapNameX, mapNameY + 22);
       ctx.strokeStyle = "#b09060"; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(mapNameX, mapNameY + 24); ctx.lineTo(mapNameX + 200, mapNameY + 24); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(mapNameX, mapNameY + 30); ctx.lineTo(mapNameX + LEFT_W - PW - 36, mapNameY + 30); ctx.stroke();
 
-      // ── ID CARD — center-left, lower ──────────────────────────────────────────
-      const CARD_X = bx + PAD + 4;
-      const CARD_Y = polY + PH + 24;
-      const CARD_W = Math.min(LEFT_W - PAD, 280);
-      const CARD_H = 128;
+      // ── ID CARD — below polaroid ───────────────────────────────────────────
+      const CARD_X = bx + PAD;
+      const CARD_Y = polY + PH + 28;
+      const CARD_W = Math.min(LEFT_W - PAD * 2, 380);
+      const CARD_H = 160;
 
-      // Card shadow + body
       ctx.fillStyle = "rgba(0,0,0,0.32)";
       ctx.fillRect(CARD_X + 3, CARD_Y + 4, CARD_W, CARD_H);
       const cardBg = ctx.createLinearGradient(CARD_X, CARD_Y, CARD_X, CARD_Y + CARD_H);
@@ -7833,63 +8222,228 @@
       ctx.strokeStyle = "#9a7a40"; ctx.lineWidth = 1;
       ctx.strokeRect(CARD_X + 0.5, CARD_Y + 0.5, CARD_W - 1, CARD_H - 1);
       // Red header bar
-      ctx.fillStyle = "#8a1010";
-      ctx.fillRect(CARD_X, CARD_Y, CARD_W, 18);
-      ctx.fillStyle = "#f0d0c0"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
-      ctx.fillText("PHANTOM RESPONSE UNIT  —  AGENT ID", CARD_X + CARD_W/2, CARD_Y + 12);
+      ctx.fillStyle = "#8a1010"; ctx.fillRect(CARD_X, CARD_Y, CARD_W, 22);
+      ctx.fillStyle = "#f0d0c0"; ctx.font = "bold 10px monospace"; ctx.textAlign = "center";
+      ctx.fillText("PHANTOM RESPONSE UNIT  —  AGENT ID", CARD_X + CARD_W/2, CARD_Y + 15);
       ctx.textAlign = "left";
 
-      // Photo box (left side of card)
-      const PHOTO_SZ = 68;
-      const photoX = CARD_X + 10, photoY = CARD_Y + 24;
-      ctx.fillStyle = "#c0b090"; ctx.fillRect(photoX, photoY, PHOTO_SZ, PHOTO_SZ);
-      ctx.strokeStyle = "#9a7a40"; ctx.lineWidth = 0.5; ctx.strokeRect(photoX+0.5, photoY+0.5, PHOTO_SZ-1, PHOTO_SZ-1);
-      // Placeholder figure
-      ctx.fillStyle = "#8a7050";
-      ctx.beginPath(); ctx.arc(photoX + PHOTO_SZ/2, photoY + 20, 12, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(photoX + 8, photoY + PHOTO_SZ - 2);
-      ctx.quadraticCurveTo(photoX + PHOTO_SZ/2, photoY + 36, photoX + PHOTO_SZ - 8, photoY + PHOTO_SZ - 2);
-      ctx.fill();
+      // Photo box — clickable portrait selector
+      const PHOTO_SZ = 96;
+      const photoX = CARD_X + 14, photoY = CARD_Y + 30;
+      _photoRect = { x: photoX, y: photoY, w: PHOTO_SZ, h: PHOTO_SZ };
 
-      // Agent info (right of photo)
-      const infoX = photoX + PHOTO_SZ + 10;
-      const infoY = CARD_Y + 28;
-      ctx.fillStyle = "#2a1808"; ctx.font = "bold 11px Georgia, serif";
+      // ── 6 portrait definitions ─────────────────────────────────────────────
+      // Order: white male, black male, asian male, white female, black female, asian female
+      // hairStyle: "short"|"long"|"afro"|"bob"|"ponytail"
+      // gender: "m"|"f"  (f = narrower shoulders)
+      // shirt: hex color of the t-shirt
+      const PORTRAITS = [
+        // 0 — White male, short brown hair, hazel eyes, grey shirt
+        { skin:"#e8c8a0", hair:"#7a4820", hairStyle:"short",    eyeColor:"#6a5030", shirt:"#787870", bgTop:"#607078", bgBot:"#404858", gender:"m" },
+        // 1 — Black male, short black hair, dark brown eyes, navy shirt
+        { skin:"#6a3818", hair:"#180e08", hairStyle:"short",    eyeColor:"#2a1408", shirt:"#283040", bgTop:"#485060", bgBot:"#283040", gender:"m" },
+        // 2 — Asian male, short black hair, dark eyes, olive shirt
+        { skin:"#d4a060", hair:"#181010", hairStyle:"short",    eyeColor:"#281808", shirt:"#505840", bgTop:"#586070", bgBot:"#383848", gender:"m" },
+        // 3 — White female, long brown hair, green eyes, dusty rose shirt
+        { skin:"#f0d0a8", hair:"#8a4820", hairStyle:"long",     eyeColor:"#486040", shirt:"#906878", bgTop:"#607880", bgBot:"#405060", gender:"f" },
+        // 4 — Black female, afro, dark brown eyes, teal shirt
+        { skin:"#5a2e10", hair:"#100808", hairStyle:"afro",     eyeColor:"#2a1008", shirt:"#306860", bgTop:"#485870", bgBot:"#283848", gender:"f" },
+        // 5 — Asian female, bob, dark eyes, lavender shirt
+        { skin:"#d8b080", hair:"#181010", hairStyle:"bob",      eyeColor:"#282018", shirt:"#786888", bgTop:"#586878", bgBot:"#384858", gender:"f" },
+      ];
+
+      const _drawPortrait = (px, py, sz, p) => {
+        const isFem = p.gender === "f";
+        // Female head sits a touch higher to give hair more room
+        const pcx = px + sz/2;
+        const hY  = py + Math.floor(sz * (isFem ? 0.31 : 0.34));
+
+        // Background
+        const pbg = ctx.createLinearGradient(px, py, px, py + sz);
+        pbg.addColorStop(0, p.bgTop); pbg.addColorStop(1, p.bgBot);
+        ctx.fillStyle = pbg; ctx.fillRect(px, py, sz, sz);
+        const pvig = ctx.createRadialGradient(pcx, py+sz*0.6, sz*0.1, pcx, py+sz*0.6, sz*0.72);
+        pvig.addColorStop(0,"rgba(0,0,0,0)"); pvig.addColorStop(1,"rgba(0,0,0,0.3)");
+        ctx.fillStyle = pvig; ctx.fillRect(px, py, sz, sz);
+
+        // T-shirt body + shoulders (female narrower, neck higher)
+        const sw  = isFem ? 24 : 32;
+        const neckW = isFem ? 6 : 7;
+        ctx.fillStyle = p.shirt;
+        ctx.beginPath();
+        ctx.moveTo(px, py+sz);
+        ctx.lineTo(px, py+sz-8);
+        ctx.quadraticCurveTo(pcx-sw-4, py+sz-22, pcx-sw, hY+30);
+        ctx.quadraticCurveTo(pcx-sw+2, hY+22, pcx-12, hY+28);
+        ctx.lineTo(pcx-neckW, hY+20);
+        ctx.quadraticCurveTo(pcx, hY+24, pcx+neckW, hY+20);
+        ctx.lineTo(pcx+12, hY+28);
+        ctx.quadraticCurveTo(pcx+sw-2, hY+22, pcx+sw, hY+30);
+        ctx.quadraticCurveTo(pcx+sw+4, py+sz-22, px+sz, py+sz-8);
+        ctx.lineTo(px+sz, py+sz);
+        ctx.closePath(); ctx.fill();
+
+        // Neck — slimmer for female
+        ctx.fillStyle = p.skin;
+        ctx.beginPath(); ctx.roundRect(pcx-neckW, hY+15, neckW*2, 14, 2); ctx.fill();
+
+        // Head — female slightly narrower/more oval
+        const hw = p.hairStyle==="afro" ? 20 : (isFem ? 19 : 21);
+        const hh = isFem ? 22 : 24;
+        ctx.fillStyle = p.skin;
+        ctx.beginPath(); ctx.ellipse(pcx, hY, hw, hh, 0, 0, Math.PI*2); ctx.fill();
+
+        // Ears — smaller on female
+        const earW = isFem ? 3.5 : 4, earH = isFem ? 5 : 6;
+        ctx.beginPath(); ctx.ellipse(pcx-hw, hY+2, earW, earH, -0.2, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(pcx+hw, hY+2, earW, earH,  0.2, 0, Math.PI*2); ctx.fill();
+
+        // ── Hair ──
+        ctx.fillStyle = p.hair;
+        if (p.hairStyle === "short") {
+          // Male short
+          ctx.beginPath(); ctx.ellipse(pcx, hY-12, 21, 14, 0, Math.PI, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(pcx-18,hY-4,6,10,-0.5,Math.PI*0.8,Math.PI*1.6); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(pcx+18,hY-4,6,10, 0.5,Math.PI*1.4,Math.PI*2.2); ctx.fill();
+        } else if (p.hairStyle === "afro") {
+          // Larger, rounder afro for female
+          ctx.beginPath(); ctx.ellipse(pcx, hY-14, isFem?28:26, isFem?26:22, 0, 0, Math.PI*2); ctx.fill();
+          // Cover ears for fullness
+          ctx.beginPath(); ctx.ellipse(pcx-22,hY+2,8,14,0,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(pcx+22,hY+2,8,14,0,0,Math.PI*2); ctx.fill();
+        } else if (p.hairStyle === "bob") {
+          // Clean chin-length bob: top cap + smooth side curtains
+          ctx.beginPath(); ctx.ellipse(pcx, hY-11, 20, 14, 0, Math.PI, Math.PI*2); ctx.fill();
+          // Left curtain — smooth ellipse angled slightly forward
+          ctx.beginPath(); ctx.ellipse(pcx-19, hY+6, 5, 17, -0.15, 0, Math.PI*2); ctx.fill();
+          // Right curtain
+          ctx.beginPath(); ctx.ellipse(pcx+19, hY+6, 5, 17,  0.15, 0, Math.PI*2); ctx.fill();
+          // Bottom fill to connect curtains cleanly
+          ctx.beginPath(); ctx.ellipse(pcx, hY+20, 18, 5, 0, 0, Math.PI*2); ctx.fill();
+        } else if (p.hairStyle === "long") {
+          // Top cap
+          ctx.beginPath(); ctx.ellipse(pcx, hY-12, 20, 14, 0, Math.PI, Math.PI*2); ctx.fill();
+          // Side flow — wider, more tapered ellipses
+          ctx.beginPath(); ctx.ellipse(pcx-21, hY+14, 6, 26, -0.1, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(pcx+21, hY+14, 6, 26,  0.1, 0, Math.PI*2); ctx.fill();
+          // Bottom wave — curved bottom instead of hard rect
+          ctx.beginPath();
+          ctx.moveTo(pcx-22, hY+36);
+          ctx.quadraticCurveTo(pcx-10, hY+42, pcx, hY+40);
+          ctx.quadraticCurveTo(pcx+10, hY+38, pcx+22, hY+42);
+          ctx.lineTo(pcx+22, hY+28); ctx.lineTo(pcx-22, hY+28);
+          ctx.closePath(); ctx.fill();
+        }
+
+        // ── Eyebrows — thinner/arched for female ──
+        ctx.strokeStyle = p.hair; ctx.lineCap = "round";
+        if (isFem) {
+          ctx.lineWidth = 1.2;
+          // Arched: start lower, peak in middle, end lower
+          ctx.beginPath(); ctx.moveTo(pcx-13,hY-7); ctx.quadraticCurveTo(pcx-9,hY-11,pcx-5,hY-8); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(pcx+5, hY-8); ctx.quadraticCurveTo(pcx+9, hY-11,pcx+13,hY-7); ctx.stroke();
+        } else {
+          ctx.lineWidth = 1.8;
+          ctx.beginPath(); ctx.moveTo(pcx-14,hY-8); ctx.lineTo(pcx-6,hY-10); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(pcx+6,hY-10); ctx.lineTo(pcx+14,hY-8); ctx.stroke();
+        }
+
+        // ── Eyes — slightly larger/more open for female ──
+        const eyeW = isFem ? 5.5 : 5;
+        const eyeH = isFem ? 4.0 : 3.5;
+        ctx.fillStyle = "#f0ece0";
+        ctx.beginPath(); ctx.ellipse(pcx-9,hY-3,eyeW,eyeH,0,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(pcx+9,hY-3,eyeW,eyeH,0,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle = p.eyeColor;
+        ctx.beginPath(); ctx.arc(pcx-9,hY-3,2.8,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(pcx+9,hY-3,2.8,0,Math.PI*2); ctx.fill();
+        // Eyelashes hint (top arc, female only)
+        if (isFem) {
+          ctx.strokeStyle = p.hair; ctx.lineWidth = 1; ctx.lineCap = "round";
+          ctx.beginPath(); ctx.ellipse(pcx-9,hY-3,eyeW,eyeH,0,Math.PI,Math.PI*2); ctx.stroke();
+          ctx.beginPath(); ctx.ellipse(pcx+9,hY-3,eyeW,eyeH,0,Math.PI,Math.PI*2); ctx.stroke();
+        }
+        ctx.fillStyle = "rgba(255,255,255,0.55)";
+        ctx.beginPath(); ctx.arc(pcx-8,hY-4,1,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(pcx+10,hY-4,1,0,Math.PI*2); ctx.fill();
+
+        // ── Nose — smaller, softer for female ──
+        const noseTone = p.skin.replace(/[0-9a-f]{2}$/i, m => Math.max(0,parseInt(m,16)-28).toString(16).padStart(2,"0"));
+        ctx.strokeStyle = noseTone; ctx.lineCap = "round";
+        if (isFem) {
+          ctx.lineWidth = 0.9;
+          ctx.beginPath(); ctx.moveTo(pcx,hY+1); ctx.lineTo(pcx-2,hY+6); ctx.lineTo(pcx+2,hY+6); ctx.stroke();
+        } else {
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(pcx,hY-1); ctx.lineTo(pcx-3,hY+6); ctx.lineTo(pcx+3,hY+6); ctx.stroke();
+        }
+
+        // ── Mouth — fuller/defined lips for female ──
+        if (isFem) {
+          const lipTone = p.skin.replace(/[0-9a-f]{2}$/i, m => Math.max(0,parseInt(m,16)-50).toString(16).padStart(2,"0"));
+          // Upper lip bow
+          ctx.strokeStyle = lipTone; ctx.lineWidth = 1.2; ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(pcx-6, hY+12);
+          ctx.quadraticCurveTo(pcx-3, hY+10, pcx, hY+11);
+          ctx.quadraticCurveTo(pcx+3, hY+10, pcx+6, hY+12);
+          ctx.stroke();
+          // Lower lip fuller curve
+          ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(pcx-6,hY+12); ctx.quadraticCurveTo(pcx,hY+16,pcx+6,hY+12); ctx.stroke();
+        } else {
+          ctx.strokeStyle = p.skin.replace(/[0-9a-f]{2}$/i, m => Math.max(0,parseInt(m,16)-40).toString(16).padStart(2,"0"));
+          ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(pcx-7,hY+12); ctx.quadraticCurveTo(pcx,hY+14,pcx+7,hY+12); ctx.stroke();
+        }
+
+        // Border
+        ctx.strokeStyle = "#9a7a40"; ctx.lineWidth = 0.5;
+        ctx.strokeRect(px+0.5, py+0.5, sz-1, sz-1);
+
+        // "click to change" hint
+        ctx.fillStyle = "rgba(255,255,255,0.38)"; ctx.font = "7px monospace"; ctx.textAlign = "center";
+        ctx.fillText("click to change", pcx, py+sz-4);
+        ctx.textAlign = "left";
+      };
+
+      _drawPortrait(photoX, photoY, PHOTO_SZ, PORTRAITS[_agentPortrait]);
+
+      // Agent info right of photo
+      const infoX = photoX + PHOTO_SZ + 16, infoY = CARD_Y + 36;
+      ctx.fillStyle = "#2a1808"; ctx.font = "bold 14px Georgia, serif";
       ctx.fillText("AGENT  #0001", infoX, infoY);
-      ctx.fillStyle = "#5a3820"; ctx.font = "9px Georgia, serif";
-      ctx.fillText("Rank:  Rookie", infoX, infoY + 14);
-      ctx.fillStyle = "#7a5830"; ctx.font = "8px Georgia, serif";
-      ctx.fillText("Investigations:  0", infoX, infoY + 27);
+      ctx.fillStyle = "#5a3820"; ctx.font = "11px Georgia, serif";
+      ctx.fillText("Rank:  Rookie", infoX, infoY + 18);
+      ctx.fillStyle = "#7a5830"; ctx.font = "10px Georgia, serif";
+      ctx.fillText("Investigations:  0", infoX, infoY + 34);
 
-      // XP bar section
-      const barX  = infoX, barY = infoY + 40;
-      const barW  = CARD_W - (PHOTO_SZ + 28);
+      // XP bar
+      const barX = infoX, barY = infoY + 54;
+      const barW = CARD_W - (PHOTO_SZ + 44);
       const xpPct = playerXPNext > 0 ? Math.min(playerXP / playerXPNext, 1) : 0;
-      // Level / XP labels above bar
-      ctx.fillStyle = "#3a2010"; ctx.font = "bold 8px monospace"; ctx.textAlign = "left";
-      ctx.fillText("Level " + playerLevel, barX, barY - 3);
-      ctx.fillStyle = "#5a3820"; ctx.font = "7px monospace"; ctx.textAlign = "right";
-      ctx.fillText(playerXP + " / " + playerXPNext + " XP", barX + barW, barY - 3);
+      ctx.fillStyle = "#3a2010"; ctx.font = "bold 10px monospace"; ctx.textAlign = "left";
+      ctx.fillText("Level " + playerLevel, barX, barY - 4);
+      ctx.fillStyle = "#5a3820"; ctx.font = "9px monospace"; ctx.textAlign = "right";
+      ctx.fillText(playerXP + " / " + playerXPNext + " XP", barX + barW, barY - 4);
       ctx.textAlign = "left";
-      // Bar bg
-      ctx.fillStyle = "#b8a070"; ctx.fillRect(barX, barY, barW, 10);
-      ctx.strokeStyle = "#9a7a40"; ctx.lineWidth = 0.5; ctx.strokeRect(barX+0.5, barY+0.5, barW-1, 9);
-      // Bar fill
+      ctx.fillStyle = "#b8a070"; ctx.fillRect(barX, barY, barW, 13);
+      ctx.strokeStyle = "#9a7a40"; ctx.lineWidth = 0.5;
+      ctx.strokeRect(barX+0.5, barY+0.5, barW-1, 12);
       const xpGrad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
       xpGrad.addColorStop(0, "#906018"); xpGrad.addColorStop(1, "#e8c030");
-      ctx.fillStyle = xpGrad; ctx.fillRect(barX, barY, Math.floor(barW * xpPct), 10);
+      ctx.fillStyle = xpGrad; ctx.fillRect(barX, barY, Math.floor(barW * xpPct), 13);
 
       // Thumbtack on card
       ctx.fillStyle = "#c82020";
-      ctx.beginPath(); ctx.arc(CARD_X + CARD_W/2, CARD_Y - 1, 5, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(CARD_X + CARD_W/2, CARD_Y - 1, 6, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle = "rgba(255,100,100,0.4)";
-      ctx.beginPath(); ctx.arc(CARD_X + CARD_W/2 - 1, CARD_Y - 2, 2, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(CARD_X + CARD_W/2 - 1, CARD_Y - 2, 3, 0, Math.PI*2); ctx.fill();
 
-      // ── START BUTTON — bottom-right of center+left area ─────────────────────
-      const btnW = 210, btnH = 48;
-      const btnX = SPLIT_X - btnW - 20;
-      const btnY = by + bh - btnH - PAD - 10;
+      // ── BEGIN INVESTIGATION BUTTON ─────────────────────────────────────────
+      const btnW = Math.min(LEFT_W - PAD * 2, 360), btnH = 60;
+      const btnX = bx + PAD;
+      const btnY = by + bh - btnH - PAD - 8;
       const btnHov = _titleMx >= btnX && _titleMx <= btnX+btnW && _titleMy >= btnY && _titleMy <= btnY+btnH;
       _titleBeginRect = { x: btnX, y: btnY, w: btnW, h: btnH };
 
@@ -7899,79 +8453,73 @@
       ctx.strokeRect(btnX+1, btnY+1, btnW-2, btnH-2);
       if (btnHov) { ctx.fillStyle = "rgba(100,210,40,0.06)"; ctx.fillRect(btnX+2, btnY+2, btnW-4, btnH-4); }
       ctx.fillStyle = btnHov ? "#aae868" : "#78d038";
-      ctx.font = "bold 14px monospace"; ctx.textAlign = "center";
-      ctx.fillText("BEGIN INVESTIGATION", btnX+btnW/2, btnY+btnH/2+5);
+      ctx.font = "bold 18px monospace"; ctx.textAlign = "center";
+      ctx.fillText("BEGIN INVESTIGATION", btnX+btnW/2, btnY+btnH/2+6);
       ctx.textAlign = "left";
-      // Hint lines below button
+      // Hint lines
       const hint = isMobile ? "Tap to interact  ·  ESC: quit round"
                             : "WASD move  ·  E interact  ·  J journal  ·  ESC quit";
-      ctx.fillStyle = "#4a3818"; ctx.font = "7px monospace"; ctx.textAlign = "center";
-      ctx.fillText(hint, btnX + btnW/2, btnY + btnH + 14);
-      ctx.fillText("ENTER to begin  ·  ← → navigate boards", btnX + btnW/2, btnY + btnH + 26);
+      ctx.fillStyle = "#4a3818"; ctx.font = "9px monospace"; ctx.textAlign = "center";
+      ctx.fillText(hint, btnX + btnW/2, btnY + btnH + 16);
+      ctx.fillText("ENTER to begin  ·  ← → navigate boards", btnX + btnW/2, btnY + btnH + 30);
       ctx.textAlign = "left";
 
-      // ── ITEM LIST — right column ──────────────────────────────────────────────
+      // ── ITEM LIST — right column ───────────────────────────────────────────
       const LIST_ITEMS = [
         "Video Camera", "Tripod", "Photo Camera", "Flashlight", "UV Flashlight",
         "EMF Reader", "Thermometer", "D.O.T.S. Projector", "Ghost Book", "Spirit Box",
         "Lighter", "Candle", "Incense", "Crucifix", "Sanity Pills",
         "Sound Sensor", "Motion Sensor", "Head Camera", "Salt",
       ];
-      const ITEM_STARS = {};  // placeholder — all items at 1 star for now
+      const ITEM_STARS = {};
       LIST_ITEMS.forEach(n => { ITEM_STARS[n] = 1; });
 
-      const LIST_X   = SPLIT_X + 8;
-      const LIST_Y   = by + PAD;
-      const LIST_W   = RIGHT_W - 16;
-      const ROW_H    = 17;
-      const LIST_H   = LIST_ITEMS.length * ROW_H + 28;
+      const LIST_X = SPLIT_X + 4;
+      const LIST_Y = by + PAD;
+      const LIST_W = bx + bw - LIST_X - PAD;
+      const ROW_H  = Math.floor((bh - PAD * 2 - 32) / LIST_ITEMS.length); // fill full column height
+      const LIST_H = LIST_ITEMS.length * ROW_H + 32;
 
       // Paper bg + shadow
-      ctx.fillStyle = "rgba(0,0,0,0.25)";
-      ctx.fillRect(LIST_X + 3, LIST_Y + 4, LIST_W, LIST_H);
-      ctx.fillStyle = "#f0e8cc";
-      ctx.fillRect(LIST_X, LIST_Y, LIST_W, LIST_H);
+      ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.fillRect(LIST_X + 4, LIST_Y + 5, LIST_W, LIST_H);
+      ctx.fillStyle = "#f0e8cc"; ctx.fillRect(LIST_X, LIST_Y, LIST_W, LIST_H);
       // Ruled lines
       ctx.strokeStyle = "rgba(180,150,100,0.20)"; ctx.lineWidth = 0.5;
-      for (let ri = 1; ri < LIST_ITEMS.length + 1; ri++) {
-        const lineY = LIST_Y + 26 + ri * ROW_H;
-        ctx.beginPath(); ctx.moveTo(LIST_X + 6, lineY); ctx.lineTo(LIST_X + LIST_W - 6, lineY); ctx.stroke();
+      for (let ri = 1; ri <= LIST_ITEMS.length; ri++) {
+        const lineY = LIST_Y + 30 + ri * ROW_H;
+        ctx.beginPath(); ctx.moveTo(LIST_X + 8, lineY); ctx.lineTo(LIST_X + LIST_W - 8, lineY); ctx.stroke();
       }
       ctx.strokeStyle = "#b09060"; ctx.lineWidth = 0.8;
       ctx.strokeRect(LIST_X + 0.5, LIST_Y + 0.5, LIST_W - 1, LIST_H - 1);
-      // Red left margin line
+      // Red margin line
       ctx.strokeStyle = "rgba(200,50,50,0.30)"; ctx.lineWidth = 0.8;
-      ctx.beginPath(); ctx.moveTo(LIST_X + 22, LIST_Y + 2); ctx.lineTo(LIST_X + 22, LIST_Y + LIST_H - 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(LIST_X + 26, LIST_Y + 4); ctx.lineTo(LIST_X + 26, LIST_Y + LIST_H - 4); ctx.stroke();
       // Header
-      ctx.fillStyle = "#3a2010"; ctx.font = "bold 8px Georgia, serif"; ctx.textAlign = "center";
-      ctx.fillText("VAN INVENTORY", LIST_X + LIST_W/2, LIST_Y + 14);
+      ctx.fillStyle = "#3a2010"; ctx.font = "bold 11px Georgia, serif"; ctx.textAlign = "center";
+      ctx.fillText("VAN INVENTORY", LIST_X + LIST_W/2, LIST_Y + 18);
       ctx.strokeStyle = "rgba(160,120,60,0.40)"; ctx.lineWidth = 0.5;
-      ctx.beginPath(); ctx.moveTo(LIST_X + 8, LIST_Y + 18); ctx.lineTo(LIST_X + LIST_W - 8, LIST_Y + 18); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(LIST_X + 10, LIST_Y + 24); ctx.lineTo(LIST_X + LIST_W - 10, LIST_Y + 24); ctx.stroke();
       // Thumbtack
       ctx.fillStyle = "#c82020";
-      ctx.beginPath(); ctx.arc(LIST_X + LIST_W/2, LIST_Y - 1, 5, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(LIST_X + LIST_W/2, LIST_Y - 1, 6, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle = "rgba(255,100,100,0.4)";
-      ctx.beginPath(); ctx.arc(LIST_X + LIST_W/2 - 1, LIST_Y - 2, 2, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(LIST_X + LIST_W/2 - 1, LIST_Y - 2, 3, 0, Math.PI*2); ctx.fill();
 
       // Item rows
-      const STAR_FULL  = "★";  // filled star
-      const STAR_EMPTY = "☆";  // empty star
-      const MAX_STARS  = 4;
+      const STAR_FULL = "★", STAR_EMPTY = "☆", MAX_STARS = 4;
+      const itemFontSz = Math.max(9, Math.min(12, Math.floor(ROW_H * 0.62)));
       for (let ri = 0; ri < LIST_ITEMS.length; ri++) {
         const name  = LIST_ITEMS[ri];
         const stars = ITEM_STARS[name] || 0;
-        const ry    = LIST_Y + 26 + ri * ROW_H;
-        const ty    = ry + ROW_H - 4;
-        // Alternating row tint
+        const ry    = LIST_Y + 30 + ri * ROW_H;
+        const ty    = ry + Math.floor(ROW_H * 0.72);
         if (ri % 2 === 0) { ctx.fillStyle = "rgba(0,0,0,0.025)"; ctx.fillRect(LIST_X + 1, ry, LIST_W - 2, ROW_H); }
-        // Item name
-        ctx.fillStyle = "#2a1808"; ctx.font = "8px Georgia, serif"; ctx.textAlign = "left";
-        ctx.fillText(name, LIST_X + 28, ty);
-        // Stars (right-aligned in the row)
+        ctx.fillStyle = "#2a1808"; ctx.font = itemFontSz + "px Georgia, serif"; ctx.textAlign = "left";
+        ctx.fillText(name, LIST_X + 32, ty);
         const starStr = STAR_FULL.repeat(stars) + STAR_EMPTY.repeat(MAX_STARS - stars);
         ctx.fillStyle = stars > 0 ? "#2a1808" : "#c0a878";
-        ctx.font = "9px monospace"; ctx.textAlign = "right";
-        ctx.fillText(starStr, LIST_X + LIST_W - 8, ty);
+        ctx.font = (itemFontSz + 1) + "px monospace"; ctx.textAlign = "right";
+        ctx.fillText(starStr, LIST_X + LIST_W - 10, ty);
       }
       ctx.textAlign = "left";
     }
@@ -7997,7 +8545,8 @@
     function _profDefaultData(username) {
       return { username, passwordHash: "", level: 1, xp: 0, xpNext: 500,
                money: 0, investigations: 0, truckLoadout: [],
-               layoutPresets: [null, null, null], createdAt: Date.now() };
+               layoutPresets: [null, null, null], layoutSlot: 0, layoutActive: -1,
+               createdAt: Date.now() };
     }
     function _profApply(data) {
       activeProfile = data;
@@ -8005,6 +8554,21 @@
       playerXP     = data.xp     ?? 0;
       playerXPNext = data.xpNext ?? 500;
       playerMoney  = data.money  ?? 0;
+      // Restore layout presets for this profile
+      _layoutPresets = (data.layoutPresets ?? [null, null, null]).map(p => p ? p.map(e => ({ ...e })) : null);
+      _layoutSlot    = data.layoutSlot   ?? 0;
+      _layoutActive  = data.layoutActive ?? -1;
+    }
+
+    // Persist layout state back to the active profile in localStorage
+    function _profSaveLayout() {
+      if (!activeProfile) return;
+      activeProfile.layoutPresets = _layoutPresets.map(p => p ? p.map(e => ({ ...e })) : null);
+      activeProfile.layoutSlot    = _layoutSlot;
+      activeProfile.layoutActive  = _layoutActive;
+      const all = _profLoadAll();
+      const key = activeProfile.username.toLowerCase();
+      if (all[key]) { all[key] = { ...all[key], ...activeProfile }; _profSaveAll(all); }
     }
     function _profLogin(username, password) {
       if (!username.trim()) return "Username cannot be empty.";
@@ -8354,6 +8918,18 @@
       ctx.fillStyle = rHov ? "#e8c050" : "#8a6830";
       ctx.textAlign = "center";
       ctx.fillText("›", rax+arrowW/2, ray+arrowH/2+7);
+
+      // ── Journal button (top-right of top bar) ──
+      const jbW = 76, jbH = 20, jbX = W - MARGIN - 6 - jbW, jbY = Math.floor(TOPBAR/2) - 10;
+      const jbHov = _titleMx >= jbX && _titleMx <= jbX+jbW && _titleMy >= jbY && _titleMy <= jbY+jbH;
+      _corkJournalBtnRect = { x: jbX, y: jbY, w: jbW, h: jbH };
+      ctx.fillStyle = jbHov ? "rgba(200,160,60,0.18)" : "rgba(200,160,60,0.07)";
+      ctx.fillRect(jbX, jbY, jbW, jbH);
+      ctx.strokeStyle = jbHov ? "#c8a040" : "#6a5028"; ctx.lineWidth = 1;
+      ctx.strokeRect(jbX+0.5, jbY+0.5, jbW-1, jbH-1);
+      ctx.fillStyle = jbHov ? "#e8c050" : "#8a6830";
+      ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+      ctx.fillText("JOURNAL  [J]", jbX + jbW/2, jbY + 13);
 
       // ── Page label ──
       const LABELS = ["MAP SELECTION","TRUCK LOADOUT","INVESTIGATOR"];
@@ -10838,7 +11414,7 @@
     function loop() {
       if (menuPhase === "profile")    { drawMenuProfile(); }
       else if (menuPhase === "title")      { drawMenuTitle(); }
-      else if (menuPhase === "corkboard") { drawMenuCorkboard(); }
+      else if (menuPhase === "corkboard") { drawMenuCorkboard(); if (journalOpen) drawJournal(); }
       else if (lostRound)     drawLose();
       else if (roundOver)     drawResult();
       else if (gameRunning) {
