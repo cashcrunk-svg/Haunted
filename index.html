@@ -24,266 +24,7 @@
       touch-action: none;
       /* CSS width/height set dynamically by resizeCanvas() to fill viewport at 4:3 */
     }
-    #titleScreen {
-      position: fixed;
-      inset: 0;
-      background: #0d0b08;
-      overflow-y: auto;
-      padding: env(safe-area-inset-top, 12px) env(safe-area-inset-right, 12px)
-               env(safe-area-inset-bottom, 12px) env(safe-area-inset-left, 12px);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 0;
-    }
-    .ts-header {
-      text-align: center;
-      margin-bottom: 18px;
-    }
-    .ts-header h1 {
-      font-family: 'Georgia', serif;
-      font-size: clamp(1.8rem, 4vw, 2.8rem);
-      color: #e8c97a;
-      letter-spacing: 0.18em;
-      text-shadow: 0 0 18px rgba(232,201,122,0.35);
-      margin: 0 0 4px 0;
-    }
-    .ts-header p {
-      font-family: monospace;
-      font-size: 0.78rem;
-      color: #7a6840;
-      letter-spacing: 0.06em;
-      margin: 0;
-    }
-    /* Corkboard row */
-    .ts-boards {
-      display: flex;
-      flex-direction: row;
-      gap: 14px;
-      align-items: flex-start;
-      justify-content: center;
-      flex-wrap: wrap;
-      width: 100%;
-      max-width: 860px;
-    }
-    /* Individual board panel */
-    .ts-board {
-      background: #7a5a28;
-      border: 3px solid #3a2808;
-      border-radius: 4px;
-      padding: 0;
-      box-shadow: 3px 4px 14px rgba(0,0,0,0.7), inset 0 0 0 2px rgba(255,220,140,0.06);
-      flex: 1;
-      min-width: 200px;
-      max-width: 270px;
-      position: relative;
-    }
-    /* Cork grain texture via repeating lines */
-    .ts-board::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      border-radius: 2px;
-      background: repeating-linear-gradient(
-        172deg,
-        transparent,
-        transparent 6px,
-        rgba(120,80,20,0.13) 6px,
-        rgba(120,80,20,0.13) 7px
-      );
-      pointer-events: none;
-    }
-    .ts-board-inner {
-      position: relative;
-      padding: 14px 12px 16px;
-      z-index: 1;
-    }
-    /* Board label tape strip at top */
-    .ts-board-label {
-      display: block;
-      background: #1a1208;
-      color: #a08040;
-      font-family: monospace;
-      font-size: 0.62rem;
-      letter-spacing: 0.14em;
-      text-align: center;
-      padding: 4px 0 3px;
-      border-bottom: 2px solid #3a2808;
-      position: relative;
-      z-index: 2;
-    }
-    /* Pinned note card style */
-    .ts-note {
-      background: #ede0c0;
-      border: 1px solid #b09060;
-      border-radius: 2px;
-      padding: 8px 10px;
-      margin-bottom: 8px;
-      position: relative;
-      font-family: 'Georgia', serif;
-      color: #2a1808;
-      font-size: 0.78rem;
-      line-height: 1.5;
-      box-shadow: 1px 2px 6px rgba(0,0,0,0.4);
-    }
-    /* Red thumbtack on notes */
-    .ts-note::before {
-      content: '';
-      width: 8px; height: 8px;
-      background: #cc2020;
-      border-radius: 50%;
-      border: 1px solid #8a0000;
-      position: absolute;
-      top: -5px; left: 50%; transform: translateX(-50%);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.5);
-    }
-    /* Map card */
-    .ts-map-card {
-      background: #e8dfc8;
-      border: 2px solid #a09060;
-      border-radius: 2px;
-      padding: 10px 8px 8px;
-      cursor: pointer;
-      position: relative;
-      text-align: center;
-      transition: border-color 0.15s;
-      box-shadow: 1px 2px 5px rgba(0,0,0,0.35);
-      margin-bottom: 4px;
-      user-select: none;
-    }
-    .ts-map-card:hover { border-color: #e8c97a; }
-    .ts-map-card.selected {
-      border-color: #e8c97a;
-      background: #f0e8cc;
-      box-shadow: 0 0 0 2px #c8a040, 1px 2px 5px rgba(0,0,0,0.35);
-    }
-    .ts-map-card-name {
-      font-family: monospace;
-      font-size: 0.72rem;
-      font-weight: bold;
-      color: #3a2808;
-      letter-spacing: 0.05em;
-      margin-top: 4px;
-    }
-    .ts-map-card-sub {
-      font-family: monospace;
-      font-size: 0.6rem;
-      color: #7a6040;
-      margin-top: 2px;
-    }
-    /* Selected tack indicator */
-    .ts-map-card .sel-tack {
-      display: none;
-      position: absolute;
-      top: -6px; right: 8px;
-      width: 10px; height: 10px;
-      background: #e8c030;
-      border: 1.5px solid #a08000;
-      border-radius: 50%;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.5);
-    }
-    .ts-map-card.selected .sel-tack { display: block; }
-    .ts-map-card .sel-check {
-      display: none;
-      font-size: 0.6rem;
-      color: #806000;
-      font-family: monospace;
-      margin-top: 3px;
-    }
-    .ts-map-card.selected .sel-check { display: block; }
-    /* Map thumbnail placeholder */
-    .ts-map-thumb {
-      width: 100%;
-      height: 72px;
-      background: #1a1612;
-      border: 1px solid #6a5030;
-      border-radius: 1px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: monospace;
-      font-size: 0.55rem;
-      color: #5a4828;
-      letter-spacing: 0.08em;
-      position: relative;
-      overflow: hidden;
-    }
-    /* Simple house silhouette in thumb via CSS */
-    .ts-map-thumb::after {
-      content: '⌂';
-      font-size: 2rem;
-      color: #3a2c18;
-      position: absolute;
-    }
-    /* Shop slot row */
-    .ts-shop-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 5px;
-      margin-top: 2px;
-    }
-    .ts-shop-slot {
-      width: 36px; height: 36px;
-      background: #1a1208;
-      border: 1px solid #4a3818;
-      border-radius: 2px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.55rem;
-      color: #3a2808;
-      font-family: monospace;
-      letter-spacing: 0.04em;
-      text-align: center;
-      line-height: 1.2;
-    }
-    /* XP bar */
-    .ts-xp-bar-wrap {
-      background: #1a1208;
-      border: 1px solid #4a3818;
-      border-radius: 2px;
-      height: 10px;
-      margin: 4px 0 6px;
-      overflow: hidden;
-    }
-    .ts-xp-bar {
-      height: 100%;
-      background: linear-gradient(90deg, #806020, #e8c030);
-      width: 0%;
-      transition: width 0.4s;
-    }
-    /* Start button */
-    #startBtn {
-      display: block;
-      width: 100%;
-      background: #1a2010;
-      color: #80d040;
-      border: 2px solid #60a030;
-      border-radius: 3px;
-      padding: 10px 0;
-      font-size: 0.88rem;
-      font-family: monospace;
-      cursor: pointer;
-      letter-spacing: 0.16em;
-      font-weight: bold;
-      margin-top: 10px;
-      min-height: 44px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-      transition: background 0.12s, border-color 0.12s;
-    }
-    #startBtn:hover {
-      background: #223018;
-      border-color: #90d050;
-    }
-    #titleHints {
-      font-family: monospace;
-      font-size: 0.6rem;
-      color: #5a4828;
-      text-align: center;
-      margin-top: 6px;
-      letter-spacing: 0.05em;
-    }
+    #titleScreen { display: none; }
     #landscapePrompt {
       display: none;
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -300,95 +41,10 @@
     <div>&#x1F4F1; Rotate your device<br>to landscape mode<br><span style="font-size:0.9rem;color:#aaa;">for the best experience</span></div>
   </div>
 
-  <!-- Title Screen — Corkboard Layout -->
-  <div id="titleScreen">
+  <!-- Title screen replaced by canvas-drawn corkboard — see drawTitleScreen() -->
+  <div id="titleScreen"></div>
 
-    <!-- Header -->
-    <div class="ts-header">
-      <h1>HAUNTED</h1>
-      <p>Investigate &nbsp;·&nbsp; Identify &nbsp;·&nbsp; Escape</p>
-    </div>
-
-    <!-- Three corkboard panels -->
-    <div class="ts-boards">
-
-      <!-- BOARD 1: MAP SELECTION -->
-      <div class="ts-board" id="board-map">
-        <span class="ts-board-label">MAP SELECTION</span>
-        <div class="ts-board-inner">
-          <div class="ts-note">
-            Choose your investigation site.<br>
-            <span style="font-size:0.68rem; color:#7a6040;">One location available.</span>
-          </div>
-          <!-- Map card — clicking selects it -->
-          <div class="ts-map-card selected" id="mapCard-0" onclick="selectMap(0)">
-            <span class="sel-tack"></span>
-            <div class="ts-map-thumb"></div>
-            <div class="ts-map-card-name">THE FARMHOUSE</div>
-            <div class="ts-map-card-sub">Medium &nbsp;·&nbsp; 12 rooms</div>
-            <div class="sel-check">▶ SELECTED</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- BOARD 2: TRUCK LOADOUT / SHOP -->
-      <div class="ts-board" id="board-shop">
-        <span class="ts-board-label">TRUCK LOADOUT</span>
-        <div class="ts-board-inner">
-          <div class="ts-note">
-            Configure your equipment.<br>
-            <span style="font-size:0.68rem; color:#7a6040;">Shop coming soon.</span>
-          </div>
-          <!-- Placeholder equipment slots -->
-          <div style="font-family:monospace; font-size:0.6rem; color:#7a6040; margin-bottom:6px; letter-spacing:0.05em;">LOADOUT SLOTS</div>
-          <div class="ts-shop-row">
-            <div class="ts-shop-slot">EMF<br>Meter</div>
-            <div class="ts-shop-slot">UV<br>Light</div>
-            <div class="ts-shop-slot">Spirit<br>Box</div>
-            <div class="ts-shop-slot">Flash<br>light</div>
-            <div class="ts-shop-slot">Video<br>Cam</div>
-            <div class="ts-shop-slot">Thermo<br>meter</div>
-          </div>
-          <div style="font-family:monospace; font-size:0.56rem; color:#4a3818; margin-top:10px; text-align:center; letter-spacing:0.06em;">— SHOP UNLOCKS IN FUTURE UPDATE —</div>
-        </div>
-      </div>
-
-      <!-- BOARD 3: PROFILE / XP / START -->
-      <div class="ts-board" id="board-profile">
-        <span class="ts-board-label">INVESTIGATOR</span>
-        <div class="ts-board-inner">
-          <div class="ts-note">
-            <span style="font-family:monospace; font-size:0.7rem; font-weight:bold; color:#3a2808;">AGENT #0001</span><br>
-            <span style="font-size:0.68rem; color:#7a6040;">Rank: Rookie</span>
-          </div>
-          <!-- XP -->
-          <div style="font-family:monospace; font-size:0.6rem; color:#7a6040; letter-spacing:0.06em;">XP — LEVEL 1</div>
-          <div class="ts-xp-bar-wrap"><div class="ts-xp-bar" id="xpBar" style="width:8%;"></div></div>
-          <div style="font-family:monospace; font-size:0.56rem; color:#4a3818; margin-bottom:8px; letter-spacing:0.04em;">40 / 500 XP &nbsp;·&nbsp; 0 investigations</div>
-          <!-- Start -->
-          <button id="startBtn">BEGIN INVESTIGATION</button>
-          <p id="titleHints">Move: WASD &nbsp;|&nbsp; Interact: E &nbsp;|&nbsp; Journal: J &nbsp;|&nbsp; ESC: quit round</p>
-        </div>
-      </div>
-
-    </div><!-- /ts-boards -->
-
-  </div><!-- /titleScreen -->
-
-  <script>
-    // Map selection state — one map for now, always pre-selected
-    let _selectedMapId = 0;
-    function selectMap(id) {
-      _selectedMapId = id;
-      document.querySelectorAll('.ts-map-card').forEach(el => el.classList.remove('selected'));
-      const card = document.getElementById('mapCard-' + id);
-      if (card) card.classList.add('selected');
-    }
-    // Pre-select map 0 on load
-    selectMap(0);
-  </script>
-
-  <canvas id="gameCanvas" style="display:none;"></canvas>
+  <canvas id="gameCanvas"></canvas>
 
   <script>
     const canvas = document.getElementById("gameCanvas");
@@ -400,11 +56,7 @@
     // Mobile detection — true when primary input is touch
     const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
-    // Update mobile title hints on load
-    if (isMobile) {
-      const th = document.getElementById("titleHints");
-      if (th) th.textContent = "Use the on-screen controls — tap START to begin";
-    }
+    // isMobile is used by drawTitleScreen() to show appropriate hint text
 
     // Scale the canvas CSS size to fill the viewport while maintaining 800×600 aspect ratio.
     // The internal resolution stays 800×600 — all game coordinates are unchanged.
@@ -552,6 +204,20 @@
     };
 
     // --- Screen state ---
+    // menuPhase: "title" = haunted identity screen | "corkboard" = setup menu | null = in-game
+    let menuPhase      = "title";
+    let titleScreenActive = true;   // convenience alias: true when menuPhase !== null
+    let _corkboardPage = 0;         // active board index: 0=Map 1=Loadout 2=Investigator
+    const CORKBOARD_PAGES = 3;
+    let _selectedMapId    = 0;      // which map is highlighted (0 = The Farmhouse)
+    let _titleMx = 0, _titleMy = 0; // canvas-space mouse position for hover states
+    let _titleStartRect   = null;   // start button rect (title screen), set each frame
+    let _titleBeginRect   = null;   // "begin investigation" rect (corkboard page 2)
+    let _titleMapRects    = [];     // [{id, x, y, w, h}], set each frame
+    let _titleNavLeft     = null;   // left arrow rect
+    let _titleNavRight    = null;   // right arrow rect
+    let _truckTab         = "shop"; // active truck monitor subpage: "shop"|"truck"|"character"
+    let _truckNavRects    = [];     // [{tab, x, y, w, h}], set each frame by _drawPageShop
     let gameRunning  = false;
     let roundOver    = false;
     let guessCorrect = false;
@@ -795,8 +461,8 @@
 
     function showTitle() {
       gameRunning = false;
-      canvas.style.display = "none";
-      document.getElementById("titleScreen").style.display = "block";
+      menuPhase = "title";
+      titleScreenActive = true;
       player.x = 240;
       player.y = 918;
     }
@@ -869,17 +535,23 @@
       ghostTargetX = 0; ghostTargetY = 0;
       ghostMoveAngle = 0; ghostPauseTimer = 0; ghostWalkCycle = 0;
       vanDoor.open    = false;
-      document.getElementById("titleScreen").style.display = "none";
-      canvas.style.display = "block";
+      menuPhase = null;
+      titleScreenActive = false;
     }
 
-    // --- Start Button ---
-    document.getElementById("startBtn").addEventListener("click", () => {
+    // --- Menu flow helpers ---
+    function _enterCorkboard() {
+      menuPhase = "corkboard";
+      _corkboardPage = 0;
+    }
+    function _corkboardNav(dir) { // dir = +1 or -1
+      _corkboardPage = (_corkboardPage + dir + CORKBOARD_PAGES) % CORKBOARD_PAGES;
+    }
+    function _startGame() {
       envModeIdx = Math.floor(Math.random() * envModes.length);
       showGame();
       pickGhost();
-      if (!loopRunning) { loopRunning = true; loop(); }
-    });
+    }
 
     // --- Shared interact action — called by keyboard E and desktop mouse click ---
     // ── Shared interaction facing helper ─────────────────────────────────────
@@ -1077,6 +749,18 @@
 
     // --- Escape returns to lobby / E to interact / J for journal ---
     document.addEventListener("keydown", e => {
+      // Menu layer key handling
+      if (menuPhase === "title") {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); _enterCorkboard(); }
+        return;
+      }
+      if (menuPhase === "corkboard") {
+        if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") { e.preventDefault(); _corkboardNav(+1); return; }
+        if (e.key === "ArrowLeft"  || e.key === "a" || e.key === "A") { e.preventDefault(); _corkboardNav(-1); return; }
+        if (e.key === "Escape") { menuPhase = "title"; titleScreenActive = true; return; }
+        if ((e.key === "Enter" || e.key === " ") && _corkboardPage === 2) { e.preventDefault(); _startGame(); }
+        return;
+      }
       // Rebind intercept — if waiting for a new key, capture it now
       if (rebindingAction !== null) {
         if (e.key !== "Escape") {
@@ -2145,6 +1829,8 @@
       // Divide by CSS scale so coordinates stay in the 800×600 logical space
       mouseX = (e.clientX - rect.left) * (canvas.width  / rect.width);
       mouseY = (e.clientY - rect.top)  * (canvas.height / rect.height);
+      // Also track for title screen hover states
+      _titleMx = mouseX; _titleMy = mouseY;
     });
 
     // ── Mobile touch handlers ────────────────────────────────────────────────
@@ -5874,6 +5560,40 @@
       const mx = (e.clientX - rect.left) * (canvas.width  / rect.width);
       const my = (e.clientY - rect.top)  * (canvas.height / rect.height);
 
+      // ── Menu layers: title screen + corkboard ─────────────────────────────
+      if (menuPhase === "title") {
+        if (_titleStartRect &&
+            mx >= _titleStartRect.x && mx <= _titleStartRect.x + _titleStartRect.w &&
+            my >= _titleStartRect.y && my <= _titleStartRect.y + _titleStartRect.h) {
+          _enterCorkboard();
+        }
+        return;
+      }
+      if (menuPhase === "corkboard") {
+        // Nav arrows
+        if (_titleNavLeft  && mx >= _titleNavLeft.x  && mx <= _titleNavLeft.x  + _titleNavLeft.w  && my >= _titleNavLeft.y  && my <= _titleNavLeft.y  + _titleNavLeft.h)  { _corkboardNav(-1); return; }
+        if (_titleNavRight && mx >= _titleNavRight.x && mx <= _titleNavRight.x + _titleNavRight.w && my >= _titleNavRight.y && my <= _titleNavRight.y + _titleNavRight.h) { _corkboardNav(+1); return; }
+        // Map card (page 0)
+        if (_corkboardPage === 0) {
+          for (const mc of _titleMapRects) {
+            if (mx >= mc.x && mx <= mc.x+mc.w && my >= mc.y && my <= mc.y+mc.h) { _selectedMapId = mc.id; return; }
+          }
+        }
+        // Truck monitor left-nav (page 1)
+        if (_corkboardPage === 1) {
+          for (const tn of _truckNavRects) {
+            if (mx >= tn.x && mx <= tn.x+tn.w && my >= tn.y && my <= tn.y+tn.h) { _truckTab = tn.tab; return; }
+          }
+        }
+        // Begin investigation button (page 2)
+        if (_corkboardPage === 2 && _titleBeginRect &&
+            mx >= _titleBeginRect.x && mx <= _titleBeginRect.x + _titleBeginRect.w &&
+            my >= _titleBeginRect.y && my <= _titleBeginRect.y + _titleBeginRect.h) {
+          _startGame(); return;
+        }
+        return;
+      }
+
 
       // ── Voodoo Doll popup is open — eat all clicks (no pin selection by click) ──
       if (voodooDollOpen) { return; }
@@ -6846,6 +6566,772 @@
       // ── Bottom hints ──────────────────────────────────────────────────────
       ctx.textAlign = "center"; ctx.font = "italic 10px Georgia, serif"; ctx.fillStyle = "#8a7050";
       ctx.fillText("[ J ] close", lx + lw / 2, jy + jh - 10);
+      ctx.textAlign = "left";
+    }
+
+    // ── Menu screens ─────────────────────────────────────────────────────────
+    // menuPhase "title"     → drawMenuTitle()       haunted identity screen
+    // menuPhase "corkboard" → drawMenuCorkboard()   one fullscreen board at a time
+    //
+    // Clickable rects stored each frame: _titleStartRect, _titleBeginRect,
+    // _titleMapRects, _titleNavLeft, _titleNavRight
+
+    function _tsBoard(x, y, w, h, label) {
+      // Drop shadow
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillRect(x+5, y+5, w, h);
+      // Outer wood frame
+      ctx.fillStyle = "#2a1804";
+      ctx.fillRect(x, y, w, h);
+      // Cork fill
+      ctx.fillStyle = "#8c6430";
+      ctx.fillRect(x+4, y+4, w-8, h-8);
+      // Cork grain (diagonal stripes clipped to board interior)
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x+4, y+4, w-8, h-8); ctx.clip();
+      ctx.strokeStyle = "rgba(90,50,10,0.13)"; ctx.lineWidth = 1;
+      for (let gi = -(h); gi < w+h; gi += 9) {
+        ctx.beginPath();
+        ctx.moveTo(x+4+gi, y+4);
+        ctx.lineTo(x+4+gi+h, y+4+h-8);
+        ctx.stroke();
+      }
+      ctx.restore();
+      // Label tape strip
+      ctx.fillStyle = "#160e04";
+      ctx.fillRect(x+4, y+4, w-8, 24);
+      ctx.strokeStyle = "#3a2408"; ctx.lineWidth = 1.5;
+      ctx.strokeRect(x+4.5, y+28.5, w-9, 1); // label bottom edge
+      ctx.fillStyle = "#c8a050";
+      ctx.font = "bold 8px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(label, x + w/2, y + 19);
+      ctx.textAlign = "left";
+      // Thin inner bevel
+      ctx.strokeStyle = "rgba(200,160,80,0.08)"; ctx.lineWidth = 1;
+      ctx.strokeRect(x+4.5, y+4.5, w-9, h-9);
+    }
+
+    // Draw a paper note pinned to the corkboard. lines = [{text, bold, size, color}]
+    function _tsNote(x, y, w, lines) {
+      const lh = 13, pad = 8;
+      const h = pad*2 + lines.length * lh;
+      // Drop shadow
+      ctx.fillStyle = "rgba(0,0,0,0.28)";
+      ctx.fillRect(x+2, y+3, w, h);
+      // Paper
+      ctx.fillStyle = "#ede0c2";
+      ctx.fillRect(x, y, w, h);
+      // Ruled lines
+      ctx.strokeStyle = "rgba(180,150,100,0.22)"; ctx.lineWidth = 0.5;
+      for (let li = y + pad + lh; li < y+h-2; li += lh) {
+        ctx.beginPath(); ctx.moveTo(x+5, li); ctx.lineTo(x+w-5, li); ctx.stroke();
+      }
+      // Paper border
+      ctx.strokeStyle = "#b09060"; ctx.lineWidth = 0.8;
+      ctx.strokeRect(x+0.5, y+0.5, w-1, h-1);
+      // Red thumbtack
+      ctx.fillStyle = "#c82020";
+      ctx.beginPath(); ctx.arc(x+w/2, y-1, 5, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = "rgba(255,100,100,0.4)";
+      ctx.beginPath(); ctx.arc(x+w/2-1, y-2, 2, 0, Math.PI*2); ctx.fill();
+      // Text
+      ctx.textAlign = "center";
+      for (let i = 0; i < lines.length; i++) {
+        const ln = lines[i];
+        ctx.font = (ln.bold ? "bold " : "") + (ln.size || 9) + "px Georgia, serif";
+        ctx.fillStyle = ln.color || "#2a1808";
+        ctx.fillText(ln.text, x + w/2, y + pad + i*lh + lh - 3);
+      }
+      ctx.textAlign = "left";
+    }
+
+    // ── Board content: MAP SELECTION (fullscreen) ────────────────────────────
+    // Map registry — add new playable entries here when ready
+    const MAP_REGISTRY = [
+      { id: 0, name: "1st Roseboosh Street", sub: "12 rooms · Medium", playable: true },
+      { id: 1, name: "???",                  sub: "Coming Soon",        playable: false },
+      { id: 2, name: "???",                  sub: "Coming Soon",        playable: false },
+      { id: 3, name: "???",                  sub: "Coming Soon",        playable: false },
+    ];
+
+    function _drawPolaroidThumbnail(px, py, pw, ph, playable) {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(px, py, pw, ph); ctx.clip();
+
+      if (playable) {
+        // ── Front exterior of 1st Roseboosh Street ──
+
+        // Sky: deep night gradient
+        const skyGrad = ctx.createLinearGradient(px, py, px, py + ph * 0.62);
+        skyGrad.addColorStop(0,   "#06080e");
+        skyGrad.addColorStop(0.5, "#0c1020");
+        skyGrad.addColorStop(1,   "#14182c");
+        ctx.fillStyle = skyGrad; ctx.fillRect(px, py, pw, ph);
+
+        // Stars
+        ctx.fillStyle = "rgba(255,255,240,0.7)";
+        const stars = [[12,6],[28,11],[45,4],[62,9],[75,5],[88,13],[100,7],[115,3],[125,10],[19,18],[54,15],[82,19],[108,14]];
+        for (const [sx, sy] of stars) {
+          const rx = px + sx * (pw/132), ry = py + sy * (ph/138);
+          if (rx < px+pw && ry < py + ph*0.5) ctx.fillRect(rx, ry, 1, 1);
+        }
+
+        // Ground / lawn
+        const groundY = py + ph * 0.76;
+        const lawnGrad = ctx.createLinearGradient(px, groundY, px, py + ph);
+        lawnGrad.addColorStop(0, "#0c1408");
+        lawnGrad.addColorStop(1, "#08100a");
+        ctx.fillStyle = lawnGrad; ctx.fillRect(px, groundY, pw, ph - (groundY - py));
+
+        // Driveway (left side, converges toward bottom)
+        ctx.fillStyle = "#181a18";
+        ctx.beginPath();
+        ctx.moveTo(px + pw*0.10, groundY);
+        ctx.lineTo(px + pw*0.40, groundY);
+        ctx.lineTo(px + pw*0.55, py + ph);
+        ctx.lineTo(px,           py + ph);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = "rgba(80,80,60,0.3)"; ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(px + pw*0.24, groundY + 2);
+        ctx.lineTo(px + pw*0.26, py + ph);
+        ctx.stroke();
+
+        // House body
+        const houseX = px + pw*0.05, houseY = py + ph*0.38;
+        const houseW = pw*0.90,      houseH = groundY - houseY;
+        ctx.fillStyle = "#2a2420"; ctx.fillRect(houseX, houseY, houseW, houseH);
+        // Siding lines
+        ctx.strokeStyle = "rgba(255,220,160,0.04)"; ctx.lineWidth = 0.8;
+        for (let hy = houseY + 4; hy < groundY; hy += 5) {
+          ctx.beginPath(); ctx.moveTo(houseX, hy); ctx.lineTo(houseX + houseW, hy); ctx.stroke();
+        }
+
+        // Main roof gable
+        const rpX = houseX + houseW*0.42, rpY = py + ph*0.13;
+        ctx.fillStyle = "#1c1810";
+        ctx.beginPath();
+        ctx.moveTo(houseX - pw*0.02, houseY + 1);
+        ctx.lineTo(rpX,              rpY);
+        ctx.lineTo(houseX + houseW + pw*0.02, houseY + 1);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = "#3a3028"; ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(houseX - pw*0.02, houseY + 1); ctx.lineTo(rpX, rpY);
+        ctx.lineTo(houseX + houseW + pw*0.02, houseY + 1); ctx.stroke();
+
+        // Garage wing (left, lower)
+        const garX = houseX, garY = houseY + houseH*0.22, garW = houseW*0.36, garH = houseH*0.78;
+        ctx.fillStyle = "#242018"; ctx.fillRect(garX, garY, garW, garH);
+        ctx.fillStyle = "#1a1612";
+        ctx.beginPath();
+        ctx.moveTo(garX - pw*0.01,    garY);
+        ctx.lineTo(garX + garW*0.46,  py + ph*0.23);
+        ctx.lineTo(garX + garW + pw*0.01, garY);
+        ctx.closePath(); ctx.fill();
+
+        // Garage door panels
+        const gdX = garX + garW*0.07, gdY = garY + garH*0.10;
+        const gdW = garW*0.86,        gdH = garH*0.76;
+        ctx.fillStyle = "#302820"; ctx.fillRect(gdX, gdY, gdW, gdH);
+        ctx.strokeStyle = "#4a3828"; ctx.lineWidth = 0.8;
+        ctx.strokeRect(gdX+0.5, gdY+0.5, gdW-1, gdH-1);
+        ctx.beginPath(); ctx.moveTo(gdX + gdW/2, gdY); ctx.lineTo(gdX + gdW/2, gdY + gdH); ctx.stroke();
+        for (let p = 1; p < 4; p++) {
+          const gy = gdY + gdH * p/4;
+          ctx.beginPath(); ctx.moveTo(gdX, gy); ctx.lineTo(gdX + gdW, gy); ctx.stroke();
+        }
+
+        // Front door
+        const fdX = houseX + houseW*0.54, fdY = houseY + houseH*0.26;
+        const fdW = houseW*0.13,          fdH = houseH*0.74;
+        ctx.fillStyle = "#3a2010"; ctx.fillRect(fdX, fdY, fdW, fdH);
+        ctx.strokeStyle = "#5a3820"; ctx.lineWidth = 0.8;
+        ctx.strokeRect(fdX+0.5, fdY+0.5, fdW-1, fdH-1);
+        // Door window
+        ctx.fillStyle = "rgba(180,150,60,0.20)"; ctx.fillRect(fdX + fdW*0.18, fdY + fdH*0.08, fdW*0.64, fdH*0.28);
+        ctx.strokeStyle = "#6a5030"; ctx.lineWidth = 0.5;
+        ctx.strokeRect(fdX + fdW*0.18, fdY + fdH*0.08, fdW*0.64, fdH*0.28);
+
+        // Porch light — warm amber glow above door
+        const plX = fdX + fdW/2, plY = fdY - 3;
+        const pGlow = ctx.createRadialGradient(plX, plY, 0, plX, plY, pw * 0.24);
+        pGlow.addColorStop(0,   "rgba(255,200,80,0.40)");
+        pGlow.addColorStop(0.35,"rgba(255,160,40,0.16)");
+        pGlow.addColorStop(1,   "rgba(255,100,0,0)");
+        ctx.fillStyle = pGlow; ctx.fillRect(px, py, pw, ph);
+        ctx.fillStyle = "#ffd060";
+        ctx.beginPath(); ctx.arc(plX, plY, 2.5, 0, Math.PI*2); ctx.fill();
+
+        // Windows — flanking the door
+        const winH = houseH*0.28, winW = houseW*0.12, winY = houseY + houseH*0.26;
+        const winXs = [houseX + houseW*0.08, houseX + houseW*0.25, houseX + houseW*0.72, houseX + houseW*0.84];
+        for (let wi = 0; wi < winXs.length; wi++) {
+          const wx = winXs[wi];
+          if (wx + winW > houseX + houseW) continue;
+          const lit = wi < 2; // left windows slightly lit
+          ctx.fillStyle = lit ? "rgba(180,140,60,0.20)" : "#181410";
+          ctx.fillRect(wx, winY, winW, winH);
+          ctx.strokeStyle = "#5a4830"; ctx.lineWidth = 0.8;
+          ctx.strokeRect(wx+0.5, winY+0.5, winW-1, winH-1);
+          ctx.beginPath(); ctx.moveTo(wx + winW/2, winY); ctx.lineTo(wx + winW/2, winY+winH); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(wx, winY + winH/2); ctx.lineTo(wx+winW, winY + winH/2); ctx.stroke();
+        }
+
+        // Vignette
+        const vig = ctx.createRadialGradient(px+pw/2, py+ph/2, pw*0.2, px+pw/2, py+ph/2, pw*0.8);
+        vig.addColorStop(0, "rgba(0,0,0,0)");
+        vig.addColorStop(1, "rgba(0,0,0,0.48)");
+        ctx.fillStyle = vig; ctx.fillRect(px, py, pw, ph);
+
+      } else {
+        // Coming soon: dark photo with question mark
+        ctx.fillStyle = "#181210"; ctx.fillRect(px, py, pw, ph);
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#3a2818"; ctx.font = "bold 32px Georgia";
+        ctx.fillText("?", px + pw/2, py + ph/2 + 10);
+        ctx.fillStyle = "#5a3820"; ctx.font = "7px monospace";
+        ctx.fillText("COMING SOON", px + pw/2, py + ph - 8);
+      }
+
+      ctx.restore();
+    }
+
+    function _drawBlueThumbtack(cx, cy) {
+      // Pin head
+      ctx.fillStyle = "#1050b8";
+      ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI*2); ctx.fill();
+      // Highlight
+      ctx.fillStyle = "#6090e8";
+      ctx.beginPath(); ctx.arc(cx - 2.5, cy - 2.5, 3, 0, Math.PI*2); ctx.fill();
+      // Stem
+      ctx.strokeStyle = "#0a3080"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(cx, cy + 8); ctx.lineTo(cx, cy + 14); ctx.stroke();
+    }
+
+    function _drawPageMap(bx, by, bw, bh) {
+      const PAD = 28;
+      const cx = bx + PAD, cy = by + PAD, cw = bw - PAD*2;
+
+      _tsNote(cx, cy + 8, 290, [
+        { text: "Choose your investigation site.", bold: false, size: 10 },
+        { text: "5 locations · 1 available now.", size: 8, color: "#7a6040" },
+      ]);
+
+      // Layout area below the pinned note
+      const areaX = cx, areaY = cy + 72, areaW = cw, areaH = bh - PAD - 72 - PAD;
+
+      // Polaroid dimensions
+      const PW = 148, PH = 180;   // full polaroid size
+      const PHOTO_H = PH - 42;    // photo image area height (bottom strip = 42px)
+
+      // 4 corner positions for the map photos
+      const corners = [
+        { x: areaX + 20,              y: areaY + 20 },               // top-left  → Roseboosh (id 0)
+        { x: areaX + areaW - PW - 20, y: areaY + 20 },               // top-right → coming soon (id 1)
+        { x: areaX + 20,              y: areaY + areaH - PH - 20 },   // bot-left  → coming soon (id 2)
+        { x: areaX + areaW - PW - 20, y: areaY + areaH - PH - 20 },   // bot-right → coming soon (id 3)
+      ];
+
+      // Center Random option (slightly smaller, distinct look)
+      const RW = 140, RH = 160, RPHOTO_H = RH - 42;
+      const randX = areaX + areaW/2 - RW/2;
+      const randY = areaY + areaH/2 - RH/2;
+
+      _titleMapRects = [];
+
+      // ── Draw center RANDOM option ──
+      const randSel = _selectedMapId === 4;
+      const randHov = _titleMx >= randX && _titleMx <= randX+RW && _titleMy >= randY && _titleMy <= randY+RH;
+      ctx.fillStyle = "rgba(0,0,0,0.28)"; ctx.fillRect(randX+4, randY+5, RW, RH);
+      ctx.fillStyle = randSel ? "#ede5d0" : (randHov ? "#e8e0cc" : "#e0d8c0");
+      ctx.fillRect(randX, randY, RW, RH);
+      // Photo area
+      ctx.fillStyle = "#201808"; ctx.fillRect(randX+8, randY+8, RW-16, RPHOTO_H-8);
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#5a4020"; ctx.font = "bold 28px Georgia";
+      ctx.fillText("?", randX + RW/2, randY + (RPHOTO_H-8)/2 + 10);
+      ctx.fillStyle = "#8a6040"; ctx.font = "bold 7px monospace";
+      ctx.fillText("RANDOM", randX + RW/2, randY + (RPHOTO_H-8)/2 + 24);
+      // Label strip
+      ctx.fillStyle = "#2a1808"; ctx.font = "bold 10px monospace";
+      ctx.fillText("RANDOM", randX + RW/2, randY + RPHOTO_H + 14);
+      ctx.fillStyle = "#9a7850"; ctx.font = "7px monospace";
+      ctx.fillText("surprise location", randX + RW/2, randY + RPHOTO_H + 27);
+      // Border
+      ctx.strokeStyle = randSel ? "#3070c8" : (randHov ? "#b09050" : "#908060");
+      ctx.lineWidth = randSel ? 2.5 : 1.5;
+      ctx.strokeRect(randX+0.5, randY+0.5, RW-1, RH-1);
+      if (randSel) _drawBlueThumbtack(randX + RW/2, randY + 8);
+      _titleMapRects.push({ id: 4, x: randX, y: randY, w: RW, h: RH });
+
+      // ── Draw 4 corner polaroids ──
+      for (let i = 0; i < MAP_REGISTRY.length; i++) {
+        const map = MAP_REGISTRY[i];
+        const px = corners[i].x, py = corners[i].y;
+        const isSel = _selectedMapId === map.id;
+        const isHov = !map.playable ? false : (_titleMx >= px && _titleMx <= px+PW && _titleMy >= py && _titleMy <= py+PH);
+
+        // Drop shadow
+        ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(px+4, py+5, PW, PH);
+        // Polaroid body
+        ctx.fillStyle = isSel ? "#f5f0e0" : (isHov ? "#f0ead8" : (map.playable ? "#eee8d4" : "#ddd5be"));
+        ctx.fillRect(px, py, PW, PH);
+
+        // Photo area
+        _drawPolaroidThumbnail(px+8, py+8, PW-16, PHOTO_H-8, map.playable);
+
+        // Label strip (bottom of polaroid)
+        ctx.textAlign = "center";
+        if (!map.playable) {
+          ctx.fillStyle = "#9a8060"; ctx.font = "bold 9px monospace";
+          ctx.fillText("???", px + PW/2, py + PHOTO_H + 14);
+          ctx.fillStyle = "#b09070"; ctx.font = "7px monospace";
+          ctx.fillText("coming soon", px + PW/2, py + PHOTO_H + 28);
+        } else {
+          ctx.fillStyle = "#2a1808"; ctx.font = "bold 9px monospace";
+          // Wrap long name across 2 lines if needed
+          const words = map.name.split(" ");
+          const mid = Math.ceil(words.length / 2);
+          const line1 = words.slice(0, mid).join(" ");
+          const line2 = words.slice(mid).join(" ");
+          if (line2) {
+            ctx.fillText(line1, px + PW/2, py + PHOTO_H + 11);
+            ctx.fillText(line2, px + PW/2, py + PHOTO_H + 22);
+            ctx.fillStyle = "#7a6040"; ctx.font = "7px monospace";
+            ctx.fillText(map.sub, px + PW/2, py + PHOTO_H + 34);
+          } else {
+            ctx.fillText(map.name, px + PW/2, py + PHOTO_H + 14);
+            ctx.fillStyle = "#7a6040"; ctx.font = "7px monospace";
+            ctx.fillText(map.sub, px + PW/2, py + PHOTO_H + 27);
+          }
+        }
+
+        // Border — blue tint if selected, muted if locked
+        ctx.strokeStyle = isSel ? "#3070c8" : (isHov ? "#c09040" : (map.playable ? "#a09060" : "#6a5040"));
+        ctx.lineWidth = isSel ? 2.5 : 1.5;
+        ctx.strokeRect(px+0.5, py+0.5, PW-1, PH-1);
+
+        // Blue thumbtack on selected
+        if (isSel) _drawBlueThumbtack(px + PW/2, py + 8);
+
+        // Only playable maps are clickable
+        if (map.playable) _titleMapRects.push({ id: map.id, x: px, y: py, w: PW, h: PH });
+      }
+
+      ctx.textAlign = "left";
+    }
+
+    // ── Board content: TRUCK LOADOUT (fullscreen) ─────────────────────────────
+    // Equipment data — add/expand entries here as shop is built out
+    const SHOP_ITEMS = [
+      { name: "EMF Meter",      tag: "EMF-5",     status: "EQUIPPED", tier: 1 },
+      { name: "UV Flashlight",  tag: "UV-A",      status: "EQUIPPED", tier: 1 },
+      { name: "Spirit Box",     tag: "SB-7",      status: "EQUIPPED", tier: 1 },
+      { name: "Flashlight",     tag: "FL-X",      status: "EQUIPPED", tier: 1 },
+      { name: "Video Camera",   tag: "VC-II",     status: "LOCKED",   tier: 2 },
+      { name: "Thermometer",    tag: "THERM",     status: "LOCKED",   tier: 2 },
+      { name: "Motion Sensor",  tag: "MS-1",      status: "LOCKED",   tier: 2 },
+      { name: "Salt",           tag: "SALT",      status: "LOCKED",   tier: 3 },
+      { name: "Crucifix",       tag: "CRUX",      status: "LOCKED",   tier: 3 },
+    ];
+
+    function _drawPageShop(bx, by, bw, bh) {
+      // ── Truck loadout monitor ──────────────────────────────────────────────
+      const MX = bx + 28, MY = by + 20, MW = bw - 56, MH = bh - 36;
+
+      // Outer bezel
+      ctx.fillStyle = "#0e0e10";
+      ctx.fillRect(MX - 10, MY - 10, MW + 20, MH + 20);
+      ctx.strokeStyle = "#2a2a30"; ctx.lineWidth = 2;
+      ctx.strokeRect(MX - 10 + 0.5, MY - 10 + 0.5, MW + 19, MH + 19);
+      ctx.strokeStyle = "#181820"; ctx.lineWidth = 1;
+      ctx.strokeRect(MX - 4 + 0.5, MY - 4 + 0.5, MW + 7, MH + 7);
+
+      // Screen fill + scan lines + phosphor glow
+      const screenGrad = ctx.createLinearGradient(MX, MY, MX, MY + MH);
+      screenGrad.addColorStop(0, "#060d08"); screenGrad.addColorStop(0.5, "#080f0a"); screenGrad.addColorStop(1, "#040804");
+      ctx.fillStyle = screenGrad; ctx.fillRect(MX, MY, MW, MH);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(MX, MY, MW, MH); ctx.clip();
+      ctx.strokeStyle = "rgba(0,255,80,0.022)"; ctx.lineWidth = 1;
+      for (let sl = MY; sl < MY + MH; sl += 3) { ctx.beginPath(); ctx.moveTo(MX, sl); ctx.lineTo(MX + MW, sl); ctx.stroke(); }
+      const screenGlow = ctx.createRadialGradient(MX+MW/2, MY+MH/2, MW*0.1, MX+MW/2, MY+MH/2, MW*0.7);
+      screenGlow.addColorStop(0, "rgba(0,255,80,0.05)"); screenGlow.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = screenGlow; ctx.fillRect(MX, MY, MW, MH);
+      ctx.restore();
+
+      // ── Header bar ──
+      const HDR_H = 28;
+      ctx.fillStyle = "rgba(0,180,60,0.10)"; ctx.fillRect(MX, MY, MW, HDR_H);
+      ctx.strokeStyle = "rgba(0,220,80,0.25)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(MX, MY + HDR_H); ctx.lineTo(MX + MW, MY + HDR_H); ctx.stroke();
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#00c840"; ctx.font = "bold 11px monospace";
+      ctx.fillText("PHANTOM RESPONSE UNIT  //  TRUCK LOADOUT", MX + 10, MY + 18);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#00803a"; ctx.font = "9px monospace";
+      ctx.fillText("UNIT #001  ·  PRE-INVESTIGATION", MX + MW - 10, MY + 18);
+
+      // ── Layout: left nav + content pane ──
+      const NAV_W   = 90;
+      const BODY_Y  = MY + HDR_H;
+      const BODY_H  = MH - HDR_H;
+      const CONT_X  = MX + NAV_W;
+      const CONT_W  = MW - NAV_W;
+
+      // Left nav background
+      ctx.fillStyle = "rgba(0,180,60,0.06)"; ctx.fillRect(MX, BODY_Y, NAV_W, BODY_H);
+      ctx.strokeStyle = "rgba(0,200,70,0.18)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(MX + NAV_W, BODY_Y); ctx.lineTo(MX + NAV_W, BODY_Y + BODY_H); ctx.stroke();
+
+      // Nav items
+      const NAV_TABS = [
+        { tab: "shop",      label: "SHOP"      },
+        { tab: "truck",     label: "TRUCK"     },
+        { tab: "character", label: "CHARACTER" },
+      ];
+      const NAV_ITEM_H = 32, NAV_ITEM_GAP = 2, NAV_START_Y = BODY_Y + 18;
+      _truckNavRects = [];
+      for (let ni = 0; ni < NAV_TABS.length; ni++) {
+        const { tab, label } = NAV_TABS[ni];
+        const ny  = NAV_START_Y + ni * (NAV_ITEM_H + NAV_ITEM_GAP);
+        const nx  = MX + 4;
+        const nw  = NAV_W - 8;
+        const isActive = _truckTab === tab;
+        const isHov    = _titleMx >= nx && _titleMx <= nx+nw && _titleMy >= ny && _titleMy <= ny+NAV_ITEM_H;
+
+        // Store rect for click detection
+        _truckNavRects.push({ tab, x: nx, y: ny, w: nw, h: NAV_ITEM_H });
+
+        // Background
+        if (isActive) {
+          ctx.fillStyle = "rgba(0,220,80,0.18)";
+          ctx.fillRect(nx, ny, nw, NAV_ITEM_H);
+          // Active left accent bar
+          ctx.fillStyle = "#00d050";
+          ctx.fillRect(nx, ny, 3, NAV_ITEM_H);
+        } else if (isHov) {
+          ctx.fillStyle = "rgba(0,180,60,0.10)";
+          ctx.fillRect(nx, ny, nw, NAV_ITEM_H);
+        }
+
+        // Border
+        ctx.strokeStyle = isActive ? "rgba(0,220,80,0.35)" : "rgba(0,160,50,0.10)";
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(nx+0.5, ny+0.5, nw-1, NAV_ITEM_H-1);
+
+        // Label
+        ctx.textAlign = "center";
+        ctx.fillStyle = isActive ? "#00e860" : (isHov ? "#009040" : "#006030");
+        ctx.font = (isActive ? "bold " : "") + "9px monospace";
+        ctx.fillText(label, nx + nw/2, ny + NAV_ITEM_H/2 + 4);
+      }
+
+      // ── Content pane ──
+      ctx.save();
+      ctx.beginPath(); ctx.rect(CONT_X, BODY_Y, CONT_W, BODY_H); ctx.clip();
+
+      if (_truckTab === "shop") {
+        // ── SHOP subpage ──
+        const TABLE_Y = BODY_Y + 16;
+        const COL_TAG    = CONT_X + 10,
+              COL_NAME   = CONT_X + 62,
+              COL_TIER   = CONT_X + CONT_W*0.52,
+              COL_STATUS = CONT_X + CONT_W*0.68,
+              COL_LOAD   = CONT_X + CONT_W*0.84;
+
+        // Column header row
+        ctx.fillStyle = "rgba(0,200,70,0.07)"; ctx.fillRect(CONT_X, TABLE_Y - 13, CONT_W, 16);
+        ctx.strokeStyle = "rgba(0,200,70,0.15)"; ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(CONT_X, TABLE_Y + 3); ctx.lineTo(CONT_X + CONT_W, TABLE_Y + 3); ctx.stroke();
+        ctx.fillStyle = "#006828"; ctx.font = "bold 8px monospace"; ctx.textAlign = "left";
+        ctx.fillText("ID",     COL_TAG,    TABLE_Y);
+        ctx.fillText("ITEM",   COL_NAME,   TABLE_Y);
+        ctx.fillText("TIER",   COL_TIER,   TABLE_Y);
+        ctx.fillText("STATUS", COL_STATUS, TABLE_Y);
+        ctx.fillText("LOAD",   COL_LOAD,   TABLE_Y);
+
+        const ROW_H = 24, ROW_Y0 = TABLE_Y + 12;
+        for (let i = 0; i < SHOP_ITEMS.length; i++) {
+          const item = SHOP_ITEMS[i];
+          const ry   = ROW_Y0 + i * ROW_H;
+          if (ry + ROW_H > BODY_Y + BODY_H - 22) break;
+          const eq = item.status === "EQUIPPED";
+          ctx.fillStyle = `rgba(0,${eq?220:120},${eq?80:60},${eq?0.07:0.03})`;
+          ctx.fillRect(CONT_X + 2, ry, CONT_W - 4, ROW_H - 2);
+          ctx.strokeStyle = "rgba(0,160,50,0.09)"; ctx.lineWidth = 0.5;
+          ctx.beginPath(); ctx.moveTo(CONT_X+6, ry+ROW_H-2); ctx.lineTo(CONT_X+CONT_W-6, ry+ROW_H-2); ctx.stroke();
+          const ty = ry + 15;
+          ctx.fillStyle = eq ? "#00b840" : "#006030"; ctx.font = "bold 8px monospace"; ctx.textAlign = "left";
+          ctx.fillText(item.tag,  COL_TAG,  ty);
+          ctx.fillStyle = eq ? "#40e880" : "#2a6040"; ctx.font = (eq?"bold ":"")+"9px monospace";
+          ctx.fillText(item.name, COL_NAME, ty);
+          ctx.fillStyle = "#005828"; ctx.font = "8px monospace";
+          ctx.fillText("T-"+item.tier, COL_TIER, ty);
+          if (eq) {
+            ctx.fillStyle = "rgba(0,180,60,0.22)"; ctx.fillRect(COL_STATUS-2, ry+3, 52, ROW_H-8);
+            ctx.fillStyle = "#00d050"; ctx.font = "bold 7px monospace";
+            ctx.fillText("● EQUIPPED", COL_STATUS+2, ty);
+          } else {
+            ctx.fillStyle = "#004020"; ctx.font = "7px monospace";
+            ctx.fillText("◌ LOCKED", COL_STATUS+2, ty);
+          }
+          ctx.fillStyle = eq ? "#00a840" : "#003018"; ctx.font = "9px monospace";
+          ctx.fillText(eq ? "■" : "□", COL_LOAD+4, ty);
+        }
+
+      } else if (_truckTab === "truck") {
+        // ── TRUCK subpage (placeholder) ──
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#006828"; ctx.font = "bold 11px monospace";
+        ctx.fillText("TRUCK OVERVIEW", CONT_X + CONT_W/2, BODY_Y + 40);
+        ctx.strokeStyle = "rgba(0,200,70,0.20)"; ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(CONT_X+10, BODY_Y+48); ctx.lineTo(CONT_X+CONT_W-10, BODY_Y+48); ctx.stroke();
+        ctx.fillStyle = "#004020"; ctx.font = "9px monospace";
+        ctx.fillText("Vehicle status, condition, and loadout map.", CONT_X + CONT_W/2, BODY_Y + 70);
+        ctx.fillStyle = "#003018"; ctx.font = "8px monospace";
+        ctx.fillText("— COMING SOON —", CONT_X + CONT_W/2, BODY_Y + 90);
+
+      } else if (_truckTab === "character") {
+        // ── CHARACTER subpage (placeholder) ──
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#006828"; ctx.font = "bold 11px monospace";
+        ctx.fillText("AGENT PROFILE", CONT_X + CONT_W/2, BODY_Y + 40);
+        ctx.strokeStyle = "rgba(0,200,70,0.20)"; ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(CONT_X+10, BODY_Y+48); ctx.lineTo(CONT_X+CONT_W-10, BODY_Y+48); ctx.stroke();
+        ctx.fillStyle = "#004020"; ctx.font = "9px monospace";
+        ctx.fillText("Investigator perks, unlocks, and stats.", CONT_X + CONT_W/2, BODY_Y + 70);
+        ctx.fillStyle = "#003018"; ctx.font = "8px monospace";
+        ctx.fillText("— COMING SOON —", CONT_X + CONT_W/2, BODY_Y + 90);
+      }
+
+      ctx.restore();
+
+      // ── Footer bar ──
+      const FOO_Y = MY + MH - 22;
+      ctx.fillStyle = "rgba(0,150,50,0.08)"; ctx.fillRect(MX, FOO_Y, MW, 22);
+      ctx.strokeStyle = "rgba(0,200,70,0.20)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(MX, FOO_Y); ctx.lineTo(MX+MW, FOO_Y); ctx.stroke();
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#005828"; ctx.font = "8px monospace";
+      ctx.fillText("— SHOP UNLOCKS WITH PROGRESSION  ·  CURRENT LOADOUT: DEFAULT —", MX + MW/2, FOO_Y + 14);
+
+      // Monitor stand
+      ctx.fillStyle = "#090909"; ctx.fillRect(MX + MW*0.35, MY + MH + 10, MW*0.30, 6);
+      ctx.fillStyle = "#0d0d0f"; ctx.fillRect(MX + MW*0.32, MY + MH + 15, MW*0.36, 4);
+
+      ctx.textAlign = "left";
+    }
+
+    // ── Board content: INVESTIGATOR / START ROUND (fullscreen) ───────────────
+    function _drawPageProfile(bx, by, bw, bh) {
+      const PAD = 28;
+      const cx = bx + PAD, cy = by + PAD, cw = bw - PAD*2;
+
+      _tsNote(cx, cy + 8, 280, [
+        { text: "AGENT  #0001", bold: true, size: 12, color: "#1e1006" },
+        { text: "Rank:  Rookie",    size: 9,  color: "#5a4830" },
+        { text: "0 investigations completed", size: 8, color: "#7a6040" },
+      ]);
+
+      const xpY = cy + 88;
+      ctx.fillStyle = "#7a6040"; ctx.font = "8px monospace";
+      ctx.fillText("XP  —  LEVEL 1", cx, xpY);
+      const barW = cw;
+      ctx.fillStyle = "#18100a"; ctx.fillRect(cx, xpY+12, barW, 14);
+      ctx.strokeStyle = "#3a2812"; ctx.lineWidth = 1; ctx.strokeRect(cx+0.5, xpY+12.5, barW-1, 13);
+      const xpGrad = ctx.createLinearGradient(cx, 0, cx+barW, 0);
+      xpGrad.addColorStop(0, "#806020"); xpGrad.addColorStop(1, "#e8c030");
+      ctx.fillStyle = xpGrad; ctx.fillRect(cx, xpY+12, Math.floor(barW*0.08), 14);
+      ctx.fillStyle = "#5a4828"; ctx.font = "8px monospace"; ctx.textAlign = "right";
+      ctx.fillText("40 / 500 XP  ·  0 rounds", cx+barW, xpY+40);
+      ctx.textAlign = "left";
+
+      // BEGIN INVESTIGATION button
+      const btnW = Math.min(cw, 400), btnH = 52;
+      const btnX = bx + Math.floor((bw - btnW)/2), btnY = xpY + 56;
+      const btnHov = _titleMx >= btnX && _titleMx <= btnX+btnW && _titleMy >= btnY && _titleMy <= btnY+btnH;
+      _titleBeginRect = { x: btnX, y: btnY, w: btnW, h: btnH };
+
+      ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(btnX+4, btnY+4, btnW, btnH);
+      ctx.fillStyle = btnHov ? "#2a4418" : "#1a3010";
+      ctx.fillRect(btnX, btnY, btnW, btnH);
+      ctx.strokeStyle = btnHov ? "#98d858" : "#66a830"; ctx.lineWidth = 2.5;
+      ctx.strokeRect(btnX+1, btnY+1, btnW-2, btnH-2);
+      if (btnHov) { ctx.fillStyle = "rgba(100,210,40,0.06)"; ctx.fillRect(btnX+2, btnY+2, btnW-4, btnH-4); }
+      ctx.fillStyle = btnHov ? "#aae868" : "#78d038";
+      ctx.font = "bold 14px monospace"; ctx.textAlign = "center";
+      ctx.fillText("BEGIN INVESTIGATION", btnX+btnW/2, btnY+btnH/2+5);
+      ctx.textAlign = "left";
+
+      const hint = isMobile ? "Tap to interact  ·  ESC: quit round"
+                            : "WASD move  ·  E interact  ·  J journal  ·  ESC quit";
+      ctx.fillStyle = "#4a3818"; ctx.font = "8px monospace"; ctx.textAlign = "center";
+      ctx.fillText(hint, bx+bw/2, btnY+btnH+18);
+      ctx.fillText("ENTER to begin  ·  ← → navigate boards", bx+bw/2, btnY+btnH+32);
+      ctx.textAlign = "left";
+    }
+
+    // ── drawMenuTitle: haunted identity / start screen ────────────────────────
+    function drawMenuTitle() {
+      const W = canvas.width, H = canvas.height;
+      ctx.fillStyle = "#06050302";
+
+      // Vignette background — almost-black with faint warm tinge
+      ctx.fillStyle = "#080604";
+      ctx.fillRect(0, 0, W, H);
+
+      // Horizontal scan-line grain
+      ctx.strokeStyle = "rgba(140,80,20,0.045)"; ctx.lineWidth = 1;
+      for (let gy = 0; gy < H; gy += 9) {
+        ctx.beginPath();
+        ctx.moveTo(0, gy + Math.sin(gy*0.14)*1.5);
+        ctx.lineTo(W, gy + Math.sin(gy*0.14+1.6)*1.5);
+        ctx.stroke();
+      }
+
+      // Radial vignette (dark edges)
+      const vig = ctx.createRadialGradient(W/2, H/2, H*0.18, W/2, H/2, H*0.85);
+      vig.addColorStop(0, "rgba(0,0,0,0)");
+      vig.addColorStop(1, "rgba(0,0,0,0.82)");
+      ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
+
+      // ── Decorative horizontal rule lines ──
+      ctx.strokeStyle = "rgba(180,130,40,0.18)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(60, 130); ctx.lineTo(W-60, 130); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(60, 420); ctx.lineTo(W-60, 420); ctx.stroke();
+
+      // ── Paranormal case file number ──
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#6a5828"; ctx.font = "9px monospace";
+      ctx.fillText("CASE FILE  #0001  ·  PARANORMAL INVESTIGATION UNIT", W/2, 116);
+
+      // ── Main title ──
+      ctx.shadowColor = "rgba(232,201,80,0.6)"; ctx.shadowBlur = 36;
+      ctx.fillStyle = "#f0d870"; ctx.font = "bold 72px Georgia, serif";
+      ctx.fillText("HAUNTED", W/2, 224);
+      ctx.shadowBlur = 0;
+
+      // ── Subtitle: series of eerie lines ──
+      ctx.fillStyle = "#8a7040"; ctx.font = "italic 13px Georgia, serif";
+      ctx.fillText("Something is still in the house.", W/2, 260);
+
+      ctx.strokeStyle = "rgba(180,130,40,0.14)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(W/2-120, 276); ctx.lineTo(W/2+120, 276); ctx.stroke();
+
+      ctx.fillStyle = "#5a4828"; ctx.font = "10px monospace";
+      ctx.fillText("INVESTIGATE  ·  IDENTIFY  ·  ESCAPE", W/2, 298);
+
+      // ── Flavor block ──
+      ctx.fillStyle = "#3a2e18"; ctx.font = "italic 10px Georgia, serif";
+      ctx.fillText("Reports of unexplained activity. No prior team has returned a confirmed ID.", W/2, 346);
+      ctx.fillText("Your objective: gather evidence, identify the entity, and get out alive.", W/2, 364);
+
+      // ── START button ──
+      const btnW = 200, btnH = 48;
+      const btnX = Math.floor((W-btnW)/2), btnY = 444;
+      const btnHov = _titleMx >= btnX && _titleMx <= btnX+btnW && _titleMy >= btnY && _titleMy <= btnY+btnH;
+      _titleStartRect = { x: btnX, y: btnY, w: btnW, h: btnH };
+
+      // Outer glow when hovered
+      if (btnHov) {
+        ctx.shadowColor = "rgba(232,201,80,0.4)"; ctx.shadowBlur = 18;
+      }
+      ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(btnX+4, btnY+4, btnW, btnH);
+      ctx.fillStyle = btnHov ? "#251e0a" : "#1a1506";
+      ctx.fillRect(btnX, btnY, btnW, btnH);
+      ctx.strokeStyle = btnHov ? "#d4b030" : "#8a6c20"; ctx.lineWidth = 2;
+      ctx.strokeRect(btnX+1, btnY+1, btnW-2, btnH-2);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = btnHov ? "#f0d060" : "#c8a840";
+      ctx.font = "bold 13px monospace"; ctx.textAlign = "center";
+      ctx.fillText("START", btnX+btnW/2, btnY+btnH/2+5);
+
+      // ── Bottom hint strip ──
+      ctx.strokeStyle = "rgba(180,130,40,0.12)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(60, 524); ctx.lineTo(W-60, 524); ctx.stroke();
+      ctx.fillStyle = "#3a2e18"; ctx.font = "8px monospace"; ctx.textAlign = "center";
+      ctx.fillText("PRESS  ENTER  OR  CLICK  START  TO  CONTINUE", W/2, 546);
+      ctx.fillText("ESC during a round returns here", W/2, 560);
+
+      ctx.textAlign = "left";
+    }
+
+    // ── drawMenuCorkboard: fullscreen single-page corkboard menu ─────────────
+    function drawMenuCorkboard() {
+      const W = canvas.width, H = canvas.height;
+
+      // ── Background ──
+      ctx.fillStyle = "#0e0c09";
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = "rgba(150,90,20,0.05)"; ctx.lineWidth = 1;
+      for (let gy = 0; gy < H; gy += 10) {
+        ctx.beginPath();
+        ctx.moveTo(0, gy + Math.sin(gy*0.18)*1.5);
+        ctx.lineTo(W, gy + Math.sin(gy*0.18+1.4)*1.5);
+        ctx.stroke();
+      }
+
+      // ── Full-screen corkboard panel ──
+      const MARGIN = 14, TOPBAR = 36;
+      const bx = MARGIN, by = TOPBAR + 4, bw = W - MARGIN*2, bh = H - TOPBAR - MARGIN - 4;
+      _tsBoard(bx, by, bw, bh, ["MAP SELECTION","TRUCK LOADOUT","INVESTIGATOR"][_corkboardPage]);
+
+      // ── Draw active page content ──
+      if      (_corkboardPage === 0) _drawPageMap(bx, by, bw, bh);
+      else if (_corkboardPage === 1) _drawPageShop(bx, by, bw, bh);
+      else                           _drawPageProfile(bx, by, bw, bh);
+
+      // ── Top navigation bar ──
+      ctx.fillStyle = "#0a0806"; ctx.fillRect(0, 0, W, TOPBAR);
+      ctx.strokeStyle = "#3a2808"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, TOPBAR); ctx.lineTo(W, TOPBAR); ctx.stroke();
+
+      // Page dots
+      const dotR = 4, dotGap = 14, dotY = TOPBAR/2;
+      const dotsX0 = W/2 - (CORKBOARD_PAGES-1)*dotGap/2;
+      for (let i = 0; i < CORKBOARD_PAGES; i++) {
+        ctx.fillStyle = (i === _corkboardPage) ? "#c8a040" : "#3a2808";
+        ctx.beginPath(); ctx.arc(dotsX0 + i*dotGap, dotY, dotR, 0, Math.PI*2); ctx.fill();
+        if (i === _corkboardPage) {
+          ctx.strokeStyle = "rgba(200,160,60,0.4)"; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(dotsX0 + i*dotGap, dotY, dotR+3, 0, Math.PI*2); ctx.stroke();
+        }
+      }
+
+      // ── Left nav arrow ──
+      const arrowW = 28, arrowH = 48;
+      const lax = MARGIN + 6, lay = by + bh/2 - arrowH/2;
+      const lHov = _titleMx >= lax && _titleMx <= lax+arrowW && _titleMy >= lay && _titleMy <= lay+arrowH;
+      _titleNavLeft = { x: lax, y: lay, w: arrowW, h: arrowH };
+      ctx.fillStyle = lHov ? "rgba(200,160,60,0.18)" : "rgba(200,160,60,0.06)";
+      ctx.fillRect(lax, lay, arrowW, arrowH);
+      ctx.strokeStyle = lHov ? "#c8a040" : "#6a5028"; ctx.lineWidth = 1.5;
+      ctx.strokeRect(lax+0.5, lay+0.5, arrowW-1, arrowH-1);
+      ctx.fillStyle = lHov ? "#e8c050" : "#8a6830";
+      ctx.font = "bold 18px monospace"; ctx.textAlign = "center";
+      ctx.fillText("‹", lax+arrowW/2, lay+arrowH/2+7);
+
+      // ── Right nav arrow ──
+      const rax = W - MARGIN - 6 - arrowW, ray = lay;
+      const rHov = _titleMx >= rax && _titleMx <= rax+arrowW && _titleMy >= ray && _titleMy <= ray+arrowH;
+      _titleNavRight = { x: rax, y: ray, w: arrowW, h: arrowH };
+      ctx.fillStyle = rHov ? "rgba(200,160,60,0.18)" : "rgba(200,160,60,0.06)";
+      ctx.fillRect(rax, ray, arrowW, arrowH);
+      ctx.strokeStyle = rHov ? "#c8a040" : "#6a5028"; ctx.lineWidth = 1.5;
+      ctx.strokeRect(rax+0.5, ray+0.5, arrowW-1, arrowH-1);
+      ctx.fillStyle = rHov ? "#e8c050" : "#8a6830";
+      ctx.textAlign = "center";
+      ctx.fillText("›", rax+arrowW/2, ray+arrowH/2+7);
+
+      // ── Page label ──
+      const LABELS = ["MAP SELECTION","TRUCK LOADOUT","INVESTIGATOR"];
+      ctx.fillStyle = "#6a5028"; ctx.font = "8px monospace"; ctx.textAlign = "center";
+      ctx.fillText(LABELS[_corkboardPage] + "  ·  " + (_corkboardPage+1) + " / " + CORKBOARD_PAGES
+                   + "  ·  ESC back to title  ·  ← → navigate", W/2, TOPBAR - 5);
+
       ctx.textAlign = "left";
     }
 
@@ -9321,7 +9807,9 @@
 
     // --- Game Loop ---
     function loop() {
-      if (lostRound)          drawLose();
+      if (menuPhase === "title")      { drawMenuTitle(); }
+      else if (menuPhase === "corkboard") { drawMenuCorkboard(); }
+      else if (lostRound)     drawLose();
       else if (roundOver)     drawResult();
       else if (gameRunning) {
         if (!journalOpen && !equipmentOpen && !keypadOpen && !dangerTimerOpen && !fourPanelOpen && !corkBoardOpen) update();
@@ -9344,7 +9832,9 @@
       requestAnimationFrame(loop); // always keep running
     }
 
-    // loop() is called when Start is clicked
+    // Start the loop immediately — draws title screen until player begins
+    loopRunning = true;
+    loop();
   </script>
 </body>
 </html>
