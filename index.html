@@ -205,7 +205,7 @@
 
     // --- Screen state ---
     // menuPhase: "title" = haunted identity screen | "corkboard" = setup menu | null = in-game
-    let menuPhase      = "title";
+    let menuPhase      = "profile"; // starts at profile screen; "title" after login
     let titleScreenActive = true;   // convenience alias: true when menuPhase !== null
     let _corkboardPage = 0;         // active board index: 0=Map 1=Loadout 2=Investigator
     const CORKBOARD_PAGES = 3;
@@ -216,14 +216,19 @@
     let _titleMapRects    = [];     // [{id, x, y, w, h}], set each frame
     let _titleNavLeft     = null;   // left arrow rect
     let _titleNavRight    = null;   // right arrow rect
-    let _truckTab         = "shop"; // active truck monitor subpage: "shop"|"truck"|"character"
+    let _truckTab         = "shop"; // active truck monitor subpage: "shop"|"truck"|"layout"|"character"
     let _truckNavRects    = [];     // [{tab, x, y, w, h}], set each frame by _drawPageShop
     let _shopSelectedItem = 0;       // index into SHOP_CATALOG
     let _shopScrollOffset = 0;       // first visible row index
     let _shopItemRects    = [];      // [{idx, x, y, w, h}], set each frame
+    let _shopLevel        = 1;       // active level tab in shop preview: 1, 2, or 3
+    let _shopLevelRects   = [];      // [{lvl, x, y, w, h}], set each frame
     let _truckSelItem     = 0;        // selected index in TRUCK_CATALOG
     let _truckListScroll  = 0;        // scroll offset for truck item list
     let _truckItemRects   = [];       // [{idx, x, y, w, h}], set each frame
+    let _layoutSelItem    = 0;        // selected index for Layout tab (TRUCK_CATALOG reused for now)
+    let _layoutListScroll = 0;        // scroll offset for layout item list
+    let _layoutItemRects  = [];       // [{idx, x, y, w, h}], set each frame
     let gameRunning  = false;
     let roundOver    = false;
     let guessCorrect = false;
@@ -268,6 +273,19 @@
     let ghostHuntFlash   = 0;       // > 0: red hunt-flash screen overlay fading from 1.5→0
     let playerSanity     = 100;     // 0–100; head pin reduces by 25
     let playerMoney      = 0;        // earned from completed investigations; spent in shop
+    let playerLevel      = 1;        // player level (future XP progression)
+    let playerXP         = 40;       // current XP within current level
+    let playerXPNext     = 500;      // XP needed for next level
+
+    // ── Active profile ───────────────────────────────────────────────────────────────
+    let activeProfile    = null;
+    let _profPhase       = "login";   // "login" | "create"
+    let _profUser        = "";
+    let _profPass        = "";
+    let _profConfirm     = "";
+    let _profFocus       = "user";    // "user" | "pass" | "confirm"
+    let _profError       = "";
+    let _profBtnRects    = [];
     let _voodooPinRects  = [];      // rebuilt each frame for click detection
     // ── Music Box state ───────────────────────────────────────────────────
     const MUSIC_BOX_HUNT_DELAY = 1.5; // seconds until hunt triggers after activation
@@ -757,6 +775,33 @@
     // --- Escape returns to lobby / E to interact / J for journal ---
     document.addEventListener("keydown", e => {
       // Menu layer key handling
+      if (menuPhase === "profile") {
+        e.preventDefault();
+        if (e.key === "Tab") {
+          const fields = _profPhase === "create" ? ["user","pass","confirm"] : ["user","pass"];
+          const idx = fields.indexOf(_profFocus);
+          _profFocus = fields[(idx + 1) % fields.length];
+          return;
+        }
+        if (e.key === "Enter") { _profSubmit(); return; }
+        if (e.key === "Backspace") {
+          if (_profFocus === "user")    _profUser    = _profUser.slice(0,-1);
+          if (_profFocus === "pass")    _profPass    = _profPass.slice(0,-1);
+          if (_profFocus === "confirm") _profConfirm = _profConfirm.slice(0,-1);
+          return;
+        }
+        if (e.key.length === 1) {
+          if (_profFocus === "user" && _profUser.length < 16 && /^[A-Za-z0-9_]$/.test(e.key)) {
+            _profUser += e.key;
+          } else if (_profFocus === "pass" && _profPass.length < 64) {
+            _profPass += e.key;
+          } else if (_profFocus === "confirm" && _profConfirm.length < 64) {
+            _profConfirm += e.key;
+          }
+          return;
+        }
+        return;
+      }
       if (menuPhase === "title") {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); _enterCorkboard(); }
         return;
@@ -5553,6 +5598,11 @@
           _truckListScroll = Math.max(0, Math.min(TRUCK_CATALOG.length - vis, _truckListScroll + dir));
           return;
         }
+        if (menuPhase === "corkboard" && _corkboardPage === 1 && _truckTab === "layout") {
+          const vis = Math.floor((canvas.height * 0.74) / 26);
+          _layoutListScroll = Math.max(0, Math.min(TRUCK_CATALOG.length - vis, _layoutListScroll + dir));
+          return;
+        }
 
         if (journalOpen && journalTab === 2) {
           // Scroll the keybind list on the Options tab
@@ -5578,6 +5628,18 @@
       const mx = (e.clientX - rect.left) * (canvas.width  / rect.width);
       const my = (e.clientY - rect.top)  * (canvas.height / rect.height);
 
+      // ── Profile screen clicks ────────────────────────────────────────────
+      if (menuPhase === "profile") {
+        for (const b of _profBtnRects) {
+          if (mx >= b.x && mx <= b.x+b.w && my >= b.y && my <= b.y+b.h) {
+            if (b.id==="tab_login")        { _profPhase="login";  _profError=""; _profPass=""; _profConfirm=""; return; }
+            if (b.id==="tab_create")       { _profPhase="create"; _profError=""; _profPass=""; _profConfirm=""; return; }
+            if (b.id==="submit")           { _profSubmit(); return; }
+            if (b.id.startsWith("field_")) { _profFocus = b.id.slice(6); return; }
+          }
+        }
+        return;
+      }
       // ── Menu layers: title screen + corkboard ─────────────────────────────
       if (menuPhase === "title") {
         if (_titleStartRect &&
@@ -5603,6 +5665,9 @@
             if (mx >= tn.x && mx <= tn.x+tn.w && my >= tn.y && my <= tn.y+tn.h) { _truckTab = tn.tab; return; }
           }
           if (_truckTab === "shop") {
+            for (const lr of _shopLevelRects) {
+              if (mx >= lr.x && mx <= lr.x+lr.w && my >= lr.y && my <= lr.y+lr.h) { _shopLevel = lr.lvl; return; }
+            }
             for (const sr of _shopItemRects) {
               if (mx >= sr.x && mx <= sr.x+sr.w && my >= sr.y && my <= sr.y+sr.h) { _shopSelectedItem = sr.idx; return; }
             }
@@ -5610,6 +5675,11 @@
           if (_truckTab === "truck") {
             for (const tr of _truckItemRects) {
               if (mx >= tr.x && mx <= tr.x+tr.w && my >= tr.y && my <= tr.y+tr.h) { _truckSelItem = tr.idx; return; }
+            }
+          }
+          if (_truckTab === "layout") {
+            for (const lr of _layoutItemRects) {
+              if (mx >= lr.x && mx <= lr.x+lr.w && my >= lr.y && my <= lr.y+lr.h) { _layoutSelItem = lr.idx; return; }
             }
           }
         }
@@ -7209,6 +7279,7 @@
       const NAV_TABS = [
         { tab: "shop",      label: "SHOP"      },
         { tab: "truck",     label: "TRUCK"     },
+        { tab: "layout",    label: "LAYOUT"    },
         { tab: "character", label: "CHARACTER" },
       ];
       const NAV_ITEM_H = 36, NAV_PAD_Y = 14;
@@ -7245,161 +7316,165 @@
       const CP = 14;
 
       if (_truckTab === "shop") {
-        // ── Layout: left preview panel | right list panel ──
-        const PREV_W = 172;  // width of the left preview column
-        const LIST_X = CONT_X + PREV_W + 1; // list panel starts here
+        // ── Layout: left list panel | right preview panel ──
+        const PREV_W = 190;
         const LIST_W = CONT_W - PREV_W - 1;
+        const PREV_X = CONT_X + LIST_W + 1;
+        const sel    = SHOP_CATALOG[_shopSelectedItem];
 
-        // ── Left: preview panel ──
-        const sel = SHOP_CATALOG[_shopSelectedItem];
-
-        // Icon preview box
-        const ICON_SZ = 110;
-        const iconX = CONT_X + PREV_W/2;
-        const iconY = BODY_Y + 14 + ICON_SZ/2;
-        ctx.fillStyle = "#0c1620";
-        ctx.fillRect(CONT_X + (PREV_W - ICON_SZ)/2, BODY_Y + 14, ICON_SZ, ICON_SZ);
-        ctx.strokeStyle = "#1a3a50"; ctx.lineWidth = 1;
-        ctx.strokeRect(CONT_X + (PREV_W - ICON_SZ)/2 + 0.5, BODY_Y + 14.5, ICON_SZ - 1, ICON_SZ - 1);
-        ctx.save();
-        ctx.beginPath(); ctx.rect(CONT_X + (PREV_W - ICON_SZ)/2, BODY_Y + 14, ICON_SZ, ICON_SZ); ctx.clip();
-        _drawShopItemIcon(sel.name, iconX, iconY, 0.88);
-        ctx.restore();
-
-        // Item name
-        const nameY = BODY_Y + 14 + ICON_SZ + 13;
-        ctx.textAlign = "center"; ctx.fillStyle = "#90d0f0"; ctx.font = "bold 10px monospace";
-        ctx.fillText(sel.name, CONT_X + PREV_W/2, nameY);
-
-        // Category badge
-        const catColor = sel.cat === "starter" ? "#1e4830" : "#1e2e40";
-        const catLabel = sel.cat === "starter" ? "STARTER" : "OPTIONAL";
-        ctx.fillStyle = catColor; ctx.fillRect(CONT_X + 10, nameY + 5, PREV_W - 20, 13);
-        ctx.strokeStyle = sel.cat === "starter" ? "#1e6040" : "#1a3a50"; ctx.lineWidth = 0.5;
-        ctx.strokeRect(CONT_X + 10 + 0.5, nameY + 5.5, PREV_W - 21, 12);
-        ctx.fillStyle = sel.cat === "starter" ? "#30a060" : "#3a7090";
-        ctx.font = "bold 7px monospace";
-        ctx.fillText(catLabel, CONT_X + PREV_W/2, nameY + 14);
-
-        // ── Upgrade placeholder panel ──
-        const upY = nameY + 24;
-        const upH = 50;
-        ctx.fillStyle = "#0a1420"; ctx.fillRect(CONT_X + 8, upY, PREV_W - 16, upH);
-        ctx.strokeStyle = "#1a3a50"; ctx.lineWidth = 0.5;
-        ctx.strokeRect(CONT_X + 8 + 0.5, upY + 0.5, PREV_W - 17, upH - 1);
-        // Header label
-        ctx.fillStyle = "#1e4860"; ctx.fillRect(CONT_X + 8, upY, PREV_W - 16, 13);
-        ctx.fillStyle = "#2a6070"; ctx.font = "bold 7px monospace"; ctx.textAlign = "left";
-        ctx.fillText("UPGRADES", CONT_X + 13, upY + 9);
-        // Tier dots — 3 upgrade slots, all locked
-        const dotSpacing = (PREV_W - 32) / 3;
-        for (let ud = 0; ud < 3; ud++) {
-          const dotX = CONT_X + 16 + ud * dotSpacing + dotSpacing/2;
-          const dotY = upY + 32;
-          ctx.fillStyle = "#0e1e2c"; ctx.beginPath(); ctx.arc(dotX, dotY, 8, 0, Math.PI*2); ctx.fill();
-          ctx.strokeStyle = "#1a3a50"; ctx.lineWidth = 1;
-          ctx.beginPath(); ctx.arc(dotX, dotY, 8, 0, Math.PI*2); ctx.stroke();
-          ctx.fillStyle = "#1a3040"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
-          ctx.fillText((ud+1).toString(), dotX, dotY + 4);
-        }
-        ctx.fillStyle = "#1a3040"; ctx.font = "7px monospace"; ctx.textAlign = "center";
-        ctx.fillText("locked", CONT_X + PREV_W/2, upY + upH - 6);
-
-        // Description text — word-wrap
-        const descY = upY + upH + 10;
-        const maxDescW = PREV_W - 14;
-        ctx.fillStyle = "#2a5060"; ctx.font = "8px monospace"; ctx.textAlign = "left";
-        const words = sel.desc.split(" ");
-        let line = "", lineY = descY;
-        for (const word of words) {
-          const test = line ? line + " " + word : word;
-          if (ctx.measureText(test).width > maxDescW && line) {
-            ctx.fillText(line, CONT_X + 7, lineY);
-            line = word; lineY += 12;
-          } else { line = test; }
-        }
-        if (line) ctx.fillText(line, CONT_X + 7, lineY);
-
-        // Vertical divider between preview and list
-        ctx.strokeStyle = "#1a3a50"; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(LIST_X, BODY_Y); ctx.lineTo(LIST_X, BODY_Y + BODY_H); ctx.stroke();
-
-        // ── Right: scrollable item list ──
-        const ROW_H = 26;
-        const VISIBLE = Math.floor(BODY_H / ROW_H);
-        _shopScrollOffset = Math.max(0, Math.min(_shopScrollOffset, SHOP_CATALOG.length - VISIBLE));
+        // ── Left: scrollable item list ──
+        const ROW_H  = 26;
+        const HDR2   = 32;
+        const ROW_Y0 = BODY_Y + HDR2 + 2;
+        const VISIBLE = Math.floor((BODY_H - HDR2 - 2) / ROW_H);
+        _shopScrollOffset = Math.max(0, Math.min(_shopScrollOffset, Math.max(0, SHOP_CATALOG.length - VISIBLE)));
         _shopItemRects = [];
 
         // Column header — two rows: money bar + catalog label
-        const HDR2 = 32; // two-row header height
-        ctx.fillStyle = "#0c1420"; ctx.fillRect(LIST_X, BODY_Y, LIST_W, HDR2);
-        // Money bar (top row)
-        ctx.fillStyle = "#0c1c28"; ctx.fillRect(LIST_X, BODY_Y, LIST_W, 16);
+        ctx.fillStyle = "#0c1420"; ctx.fillRect(CONT_X, BODY_Y, LIST_W, HDR2);
+        ctx.fillStyle = "#0c1c28"; ctx.fillRect(CONT_X, BODY_Y, LIST_W, 16);
         ctx.strokeStyle = "#1a3a50"; ctx.lineWidth = 0.5;
-        ctx.beginPath(); ctx.moveTo(LIST_X, BODY_Y + 16); ctx.lineTo(LIST_X + LIST_W, BODY_Y + 16); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(CONT_X, BODY_Y + 16); ctx.lineTo(CONT_X + LIST_W, BODY_Y + 16); ctx.stroke();
         ctx.fillStyle = "#1a4a30"; ctx.font = "bold 8px monospace"; ctx.textAlign = "left";
-        ctx.fillText("FUNDS", LIST_X + 10, BODY_Y + 11);
-        // Money value — prominent
+        ctx.fillText("FUNDS", CONT_X + 10, BODY_Y + 11);
         const moneyStr = "$" + playerMoney.toLocaleString();
         ctx.fillStyle = playerMoney > 0 ? "#50e090" : "#2a5040";
         ctx.font = "bold 9px monospace"; ctx.textAlign = "right";
-        ctx.fillText(moneyStr, LIST_X + LIST_W - 10, BODY_Y + 11);
-        // Catalog label (second row)
+        ctx.fillText(moneyStr, CONT_X + LIST_W - 10, BODY_Y + 11);
         ctx.fillStyle = "#2a6070"; ctx.font = "bold 8px monospace"; ctx.textAlign = "left";
-        ctx.fillText("EQUIPMENT CATALOG", LIST_X + 10, BODY_Y + 27);
+        ctx.fillText("EQUIPMENT CATALOG", CONT_X + 10, BODY_Y + 27);
         ctx.textAlign = "right";
         ctx.fillStyle = "#1a3a50"; ctx.font = "8px monospace";
-        ctx.fillText(_shopScrollOffset + 1 + "–" + Math.min(_shopScrollOffset + VISIBLE, SHOP_CATALOG.length) + " / " + SHOP_CATALOG.length, LIST_X + LIST_W - 8, BODY_Y + 27);
+        ctx.fillText((_shopScrollOffset + 1) + "–" + Math.min(_shopScrollOffset + VISIBLE, SHOP_CATALOG.length) + " / " + SHOP_CATALOG.length, CONT_X + LIST_W - 8, BODY_Y + 27);
         ctx.strokeStyle = "#1a3a50"; ctx.lineWidth = 0.5;
-        ctx.beginPath(); ctx.moveTo(LIST_X, BODY_Y + HDR2); ctx.lineTo(LIST_X + LIST_W, BODY_Y + HDR2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(CONT_X, BODY_Y + HDR2); ctx.lineTo(CONT_X + LIST_W, BODY_Y + HDR2); ctx.stroke();
 
-        const ROW_Y0 = BODY_Y + HDR2 + 2;
         ctx.save();
-        ctx.beginPath(); ctx.rect(LIST_X, ROW_Y0, LIST_W, BODY_H - 20); ctx.clip();
+        ctx.beginPath(); ctx.rect(CONT_X, ROW_Y0, LIST_W, BODY_H - HDR2 - 2); ctx.clip();
         for (let vi = 0; vi < VISIBLE; vi++) {
-          const ci = _shopScrollOffset + vi;
+          const ci    = _shopScrollOffset + vi;
           if (ci >= SHOP_CATALOG.length) break;
-          const entry  = SHOP_CATALOG[ci];
-          const ry     = ROW_Y0 + vi * ROW_H;
-          const isSel  = ci === _shopSelectedItem;
-          const isHov  = !isSel && _titleMx >= LIST_X && _titleMx <= LIST_X + LIST_W &&
-                         _titleMy >= ry && _titleMy <= ry + ROW_H;
-
-          _shopItemRects.push({ idx: ci, x: LIST_X, y: ry, w: LIST_W, h: ROW_H });
-
-          // Row background
+          const entry = SHOP_CATALOG[ci];
+          const ry    = ROW_Y0 + vi * ROW_H;
+          const isSel = ci === _shopSelectedItem;
+          const isHov = !isSel && _titleMx >= CONT_X && _titleMx <= CONT_X + LIST_W &&
+                        _titleMy >= ry && _titleMy <= ry + ROW_H;
+          _shopItemRects.push({ idx: ci, x: CONT_X, y: ry, w: LIST_W, h: ROW_H });
           if (isSel) {
-            ctx.fillStyle = "rgba(30,100,140,0.20)"; ctx.fillRect(LIST_X, ry, LIST_W, ROW_H - 1);
-            ctx.fillStyle = "#1e8ab0"; ctx.fillRect(LIST_X, ry, 3, ROW_H - 1);
+            ctx.fillStyle = "rgba(30,100,140,0.20)"; ctx.fillRect(CONT_X, ry, LIST_W, ROW_H - 1);
+            ctx.fillStyle = "#1e8ab0"; ctx.fillRect(CONT_X, ry, 3, ROW_H - 1);
           } else if (isHov) {
-            ctx.fillStyle = "rgba(30,80,100,0.10)"; ctx.fillRect(LIST_X, ry, LIST_W, ROW_H - 1);
+            ctx.fillStyle = "rgba(30,80,100,0.10)"; ctx.fillRect(CONT_X, ry, LIST_W, ROW_H - 1);
           } else if (vi % 2 === 0) {
-            ctx.fillStyle = "rgba(255,255,255,0.015)"; ctx.fillRect(LIST_X, ry, LIST_W, ROW_H - 1);
+            ctx.fillStyle = "rgba(255,255,255,0.015)"; ctx.fillRect(CONT_X, ry, LIST_W, ROW_H - 1);
           }
-          // Row divider
           ctx.strokeStyle = "#0e1e2c"; ctx.lineWidth = 0.5;
-          ctx.beginPath(); ctx.moveTo(LIST_X + 6, ry + ROW_H - 1); ctx.lineTo(LIST_X + LIST_W - 6, ry + ROW_H - 1); ctx.stroke();
-
-          const ty = ry + 17;
-          // Item name
+          ctx.beginPath(); ctx.moveTo(CONT_X + 6, ry + ROW_H - 1); ctx.lineTo(CONT_X + LIST_W - 6, ry + ROW_H - 1); ctx.stroke();
           ctx.textAlign = "left";
           ctx.fillStyle = isSel ? "#90d0f0" : (isHov ? "#4a8090" : "#2a5060");
           ctx.font = (isSel ? "bold " : "") + "10px monospace";
-          ctx.fillText(entry.name, LIST_X + 12, ty);
-          // Category dot
+          ctx.fillText(entry.name, CONT_X + 12, ry + 17);
           ctx.fillStyle = entry.cat === "starter" ? "#1e7050" : "#1a3a50";
-          ctx.beginPath(); ctx.arc(LIST_X + LIST_W - 12, ry + ROW_H/2, 3, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(CONT_X + LIST_W - 12, ry + ROW_H/2, 3, 0, Math.PI*2); ctx.fill();
         }
         ctx.restore();
 
-        // Scroll indicator (thin bar on right edge of list)
+        // Scroll indicator
         if (SHOP_CATALOG.length > VISIBLE) {
-          const sbH   = BODY_H - 20;
+          const sbH    = BODY_H - HDR2 - 2;
           const thumbH = Math.max(20, sbH * VISIBLE / SHOP_CATALOG.length);
-          const thumbY = ROW_Y0 + (_shopScrollOffset / (SHOP_CATALOG.length - VISIBLE)) * (sbH - thumbH);
-          ctx.fillStyle = "#0c1620"; ctx.fillRect(LIST_X + LIST_W - 6, ROW_Y0, 6, sbH);
-          ctx.fillStyle = "#1e5070"; ctx.fillRect(LIST_X + LIST_W - 5, thumbY, 4, thumbH);
+          const thumbY = ROW_Y0 + (_shopScrollOffset / Math.max(1, SHOP_CATALOG.length - VISIBLE)) * (sbH - thumbH);
+          ctx.fillStyle = "#0c1620"; ctx.fillRect(CONT_X + LIST_W - 6, ROW_Y0, 6, sbH);
+          ctx.fillStyle = "#1e5070"; ctx.fillRect(CONT_X + LIST_W - 5, thumbY, 4, thumbH);
         }
+
+        // Vertical divider
+        ctx.strokeStyle = "#1a3a50"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(PREV_X, BODY_Y); ctx.lineTo(PREV_X, BODY_Y + BODY_H); ctx.stroke();
+
+        // ── Right: preview panel ──
+        const LVL_TAB_H = 22;
+        const LVL_TABS  = ["LVL 1", "LVL 2", "LVL 3"];
+        const LVL_TW    = Math.floor(PREV_W / 3);
+        _shopLevelRects = [];
+        for (let li = 0; li < 3; li++) {
+          const lx  = PREV_X + li * LVL_TW;
+          const act = _shopLevel === li + 1;
+          ctx.fillStyle = act ? "#0f2030" : "#080f18";
+          ctx.fillRect(lx, BODY_Y, LVL_TW - (li < 2 ? 1 : 0), LVL_TAB_H);
+          if (act) {
+            ctx.fillStyle = "#1e8ab0";
+            ctx.fillRect(lx, BODY_Y + LVL_TAB_H - 2, LVL_TW - (li < 2 ? 1 : 0), 2);
+          }
+          ctx.strokeStyle = "#1a3a50"; ctx.lineWidth = 0.5;
+          ctx.strokeRect(lx + 0.5, BODY_Y + 0.5, LVL_TW - (li < 2 ? 1.5 : 1), LVL_TAB_H - 1);
+          ctx.textAlign = "center";
+          ctx.fillStyle = act ? "#90d0f0" : "#2a5060";
+          ctx.font = "bold 8px monospace";
+          ctx.fillText(LVL_TABS[li], lx + LVL_TW / 2, BODY_Y + 14);
+          _shopLevelRects.push({ lvl: li + 1, x: lx, y: BODY_Y, w: LVL_TW, h: LVL_TAB_H });
+        }
+        // Tab bottom border
+        ctx.strokeStyle = "#1a3a50"; ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(PREV_X, BODY_Y + LVL_TAB_H); ctx.lineTo(PREV_X + PREV_W, BODY_Y + LVL_TAB_H); ctx.stroke();
+
+        const PANEL_Y = BODY_Y + LVL_TAB_H + 4;
+
+        if (_shopLevel === 1) {
+          // Icon preview box
+          const ICON_SZ = 110;
+          const iconX = PREV_X + PREV_W / 2;
+          const iconY = PANEL_Y + 8 + ICON_SZ / 2;
+          ctx.fillStyle = "#0c1620";
+          ctx.fillRect(PREV_X + (PREV_W - ICON_SZ) / 2, PANEL_Y + 8, ICON_SZ, ICON_SZ);
+          ctx.strokeStyle = "#1a3a50"; ctx.lineWidth = 1;
+          ctx.strokeRect(PREV_X + (PREV_W - ICON_SZ) / 2 + 0.5, PANEL_Y + 8.5, ICON_SZ - 1, ICON_SZ - 1);
+          ctx.save();
+          ctx.beginPath(); ctx.rect(PREV_X + (PREV_W - ICON_SZ) / 2, PANEL_Y + 8, ICON_SZ, ICON_SZ); ctx.clip();
+          _drawShopItemIcon(sel.name, iconX, iconY, 0.88);
+          ctx.restore();
+
+          // Item name
+          const nameY = PANEL_Y + 8 + ICON_SZ + 13;
+          ctx.textAlign = "center"; ctx.fillStyle = "#90d0f0"; ctx.font = "bold 10px monospace";
+          ctx.fillText(sel.name, PREV_X + PREV_W / 2, nameY);
+
+          // Category badge
+          const catColor = sel.cat === "starter" ? "#1e4830" : "#1e2e40";
+          const catLabel = sel.cat === "starter" ? "STARTER" : "OPTIONAL";
+          ctx.fillStyle = catColor; ctx.fillRect(PREV_X + 10, nameY + 5, PREV_W - 20, 13);
+          ctx.strokeStyle = sel.cat === "starter" ? "#1e6040" : "#1a3a50"; ctx.lineWidth = 0.5;
+          ctx.strokeRect(PREV_X + 10 + 0.5, nameY + 5.5, PREV_W - 21, 12);
+          ctx.fillStyle = sel.cat === "starter" ? "#30a060" : "#3a7090";
+          ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
+          ctx.fillText(catLabel, PREV_X + PREV_W / 2, nameY + 14);
+
+          // Description
+          const descY    = nameY + 28;
+          const maxDescW = PREV_W - 14;
+          ctx.fillStyle = "#2a5060"; ctx.font = "8px monospace"; ctx.textAlign = "left";
+          const words = sel.desc.split(" ");
+          let line = "", lineY = descY;
+          for (const word of words) {
+            const test = line ? line + " " + word : word;
+            if (ctx.measureText(test).width > maxDescW && line) {
+              ctx.fillText(line, PREV_X + 7, lineY);
+              line = word; lineY += 12;
+            } else { line = test; }
+          }
+          if (line) ctx.fillText(line, PREV_X + 7, lineY);
+        } else {
+          // LVL 2 / LVL 3 — Coming Soon
+          const midX = PREV_X + PREV_W / 2;
+          const midY = PANEL_Y + (BODY_H - LVL_TAB_H) / 2;
+          ctx.textAlign = "center";
+          ctx.fillStyle = "#1e4060"; ctx.font = "bold 11px monospace";
+          ctx.fillText("COMING SOON", midX, midY);
+          ctx.fillStyle = "#1a3a50"; ctx.font = "8px monospace";
+          ctx.fillText("Level " + _shopLevel + " upgrades", midX, midY + 16);
+          ctx.fillText("not yet available", midX, midY + 28);
+        }
+
       } else if (_truckTab === "truck") {
         // ── TRUCK TAB — amber/warm palette to distinguish from Shop (blue/teal) ──
         const T_ACCENT   = "#b86c10";   // amber accent line
@@ -7416,51 +7491,60 @@
         const LIST_W = CONT_W - PREV_W - 1;
         const tsel   = TRUCK_CATALOG[_truckSelItem];
 
-        // ── Left: item preview ──
-        const ICON_SZ = 110;
+        // ── Left: item detail panel (NEXT ROUND LOADOUT) ──
+        const ICON_SZ = 90;
         const iconX   = CONT_X + PREV_W/2;
-        const iconY   = BODY_Y + 14 + ICON_SZ/2;
+        const iconY   = BODY_Y + 12 + ICON_SZ/2;
 
-        // Icon box — warm dark background
+        // Icon box
         ctx.fillStyle = "#0e0906";
-        ctx.fillRect(CONT_X + (PREV_W - ICON_SZ)/2, BODY_Y + 14, ICON_SZ, ICON_SZ);
+        ctx.fillRect(CONT_X + (PREV_W - ICON_SZ)/2, BODY_Y + 12, ICON_SZ, ICON_SZ);
         ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 1;
-        ctx.strokeRect(CONT_X + (PREV_W - ICON_SZ)/2 + 0.5, BODY_Y + 14.5, ICON_SZ - 1, ICON_SZ - 1);
+        ctx.strokeRect(CONT_X + (PREV_W - ICON_SZ)/2 + 0.5, BODY_Y + 12.5, ICON_SZ - 1, ICON_SZ - 1);
         ctx.save();
-        ctx.beginPath(); ctx.rect(CONT_X + (PREV_W - ICON_SZ)/2, BODY_Y + 14, ICON_SZ, ICON_SZ); ctx.clip();
-        _drawShopItemIcon(tsel.name, iconX, iconY, 0.88);
+        ctx.beginPath(); ctx.rect(CONT_X + (PREV_W - ICON_SZ)/2, BODY_Y + 12, ICON_SZ, ICON_SZ); ctx.clip();
+        _drawShopItemIcon(tsel.name, iconX, iconY, 0.75);
         ctx.restore();
 
-        // Item name
-        const tnameY = BODY_Y + 14 + ICON_SZ + 13;
+        // Item name + role badge
+        const tnameY = BODY_Y + 12 + ICON_SZ + 11;
         ctx.textAlign = "center"; ctx.fillStyle = T_BRIGHT; ctx.font = "bold 10px monospace";
         ctx.fillText(tsel.name, CONT_X + PREV_W/2, tnameY);
-
-        // Role badge
-        ctx.fillStyle = "#2a1a06"; ctx.fillRect(CONT_X + 10, tnameY + 5, PREV_W - 20, 13);
+        ctx.fillStyle = "#2a1a06"; ctx.fillRect(CONT_X + 10, tnameY + 4, PREV_W - 20, 12);
         ctx.strokeStyle = "#4a2a08"; ctx.lineWidth = 0.5;
-        ctx.strokeRect(CONT_X + 10.5, tnameY + 5.5, PREV_W - 21, 12);
+        ctx.strokeRect(CONT_X + 10.5, tnameY + 4.5, PREV_W - 21, 11);
         ctx.fillStyle = "#a06020"; ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
-        ctx.fillText(tsel.role.toUpperCase(), CONT_X + PREV_W/2, tnameY + 14);
+        ctx.fillText(tsel.role.toUpperCase(), CONT_X + PREV_W/2, tnameY + 13);
 
-        // ── Loadout slot placeholder ──
-        const slotY = tnameY + 24;
-        const slotH = 40;
-        ctx.fillStyle = "#0c0804"; ctx.fillRect(CONT_X + 8, slotY, PREV_W - 16, slotH);
+        // ── Round config: QTY + LEVEL placeholders ──
+        const cfgY = tnameY + 22;
+        // QTY row
+        ctx.fillStyle = "#100a04"; ctx.fillRect(CONT_X + 8, cfgY, PREV_W - 16, 22);
         ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.5;
-        ctx.strokeRect(CONT_X + 8.5, slotY + 0.5, PREV_W - 17, slotH - 1);
-        ctx.fillStyle = "#2a1806"; ctx.fillRect(CONT_X + 8, slotY, PREV_W - 16, 13);
+        ctx.strokeRect(CONT_X + 8.5, cfgY + 0.5, PREV_W - 17, 21);
         ctx.fillStyle = T_DIM; ctx.font = "bold 7px monospace"; ctx.textAlign = "left";
-        ctx.fillText("PACK FOR ROUND", CONT_X + 13, slotY + 9);
-        // Placeholder pack button area
-        ctx.fillStyle = "#1a1006"; ctx.fillRect(CONT_X + 14, slotY + 16, PREV_W - 28, 18);
+        ctx.fillText("QTY", CONT_X + 13, cfgY + 14);
+        ctx.fillStyle = "#2a1408"; ctx.font = "7px monospace"; ctx.textAlign = "right";
+        ctx.fillText("1  ◄ ►", CONT_X + PREV_W - 13, cfgY + 14);
+        // LEVEL row
+        ctx.fillStyle = "#100a04"; ctx.fillRect(CONT_X + 8, cfgY + 24, PREV_W - 16, 22);
         ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.5;
-        ctx.strokeRect(CONT_X + 14.5, slotY + 16.5, PREV_W - 29, 17);
-        ctx.fillStyle = "#3a2010"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
-        ctx.fillText("+ ADD TO TRUCK", CONT_X + PREV_W/2, slotY + 28);
+        ctx.strokeRect(CONT_X + 8.5, cfgY + 24.5, PREV_W - 17, 21);
+        ctx.fillStyle = T_DIM; ctx.font = "bold 7px monospace"; ctx.textAlign = "left";
+        ctx.fillText("LEVEL", CONT_X + 13, cfgY + 38);
+        ctx.fillStyle = "#2a1408"; ctx.font = "7px monospace"; ctx.textAlign = "right";
+        ctx.fillText("1  ◄ ►", CONT_X + PREV_W - 13, cfgY + 38);
+
+        // ADD TO ROUND button
+        const addBtnY = cfgY + 52;
+        ctx.fillStyle = "#1e1208"; ctx.fillRect(CONT_X + 8, addBtnY, PREV_W - 16, 20);
+        ctx.strokeStyle = "#5a3010"; ctx.lineWidth = 0.5;
+        ctx.strokeRect(CONT_X + 8.5, addBtnY + 0.5, PREV_W - 17, 19);
+        ctx.fillStyle = "#6a4018"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+        ctx.fillText("+ ADD TO ROUND", CONT_X + PREV_W/2, addBtnY + 13);
 
         // Hint text — word-wrap
-        const thintY = slotY + slotH + 10;
+        const thintY = addBtnY + 28;
         const tmaxW  = PREV_W - 14;
         ctx.fillStyle = "#5a3818"; ctx.font = "8px monospace"; ctx.textAlign = "left";
         const thWords = ("TIP: " + tsel.hint).split(" ");
@@ -7490,11 +7574,11 @@
         ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.5;
         ctx.beginPath(); ctx.moveTo(LIST_X, BODY_Y + 16); ctx.lineTo(LIST_X + LIST_W, BODY_Y + 16); ctx.stroke();
         ctx.fillStyle = "#4a2808"; ctx.font = "bold 8px monospace"; ctx.textAlign = "left";
-        ctx.fillText("TRUCK LOADOUT", LIST_X + 10, BODY_Y + 11);
+        ctx.fillText("NEXT ROUND LOADOUT", LIST_X + 10, BODY_Y + 11);
         ctx.fillStyle = "#3a1a04"; ctx.font = "bold 9px monospace"; ctx.textAlign = "right";
-        ctx.fillText("0 / 3 PACKED", LIST_X + LIST_W - 10, BODY_Y + 11);
+        ctx.fillText("0 / 3 SELECTED", LIST_X + LIST_W - 10, BODY_Y + 11);
         ctx.fillStyle = "#4a3010"; ctx.font = "bold 8px monospace"; ctx.textAlign = "left";
-        ctx.fillText("AVAILABLE EQUIPMENT", LIST_X + 10, BODY_Y + 27);
+        ctx.fillText("SELECT ITEMS TO BRING", LIST_X + 10, BODY_Y + 27);
         ctx.textAlign = "right"; ctx.fillStyle = "#2a1808"; ctx.font = "8px monospace";
         ctx.fillText((_truckListScroll + 1) + "–" + Math.min(_truckListScroll + TVIS, TRUCK_CATALOG.length) + " / " + TRUCK_CATALOG.length, LIST_X + LIST_W - 8, BODY_Y + 27);
         ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.5;
@@ -7545,6 +7629,125 @@
           ctx.fillStyle = "#0e0804"; ctx.fillRect(LIST_X + LIST_W - 6, TROW_Y0, 6, sbH);
           ctx.fillStyle = "#4a2808"; ctx.fillRect(LIST_X + LIST_W - 5, thumbY, 4, thumbH);
         }
+      } else if (_truckTab === "layout") {
+        // ── LAYOUT TAB — mirrors Truck tab structure; diverge here later ──
+        const L_ACCENT   = "#b86c10";
+        const L_ACTIVE   = "#c87820";
+        const L_DIM      = "#5a3810";
+        const L_BRIGHT   = "#f0c060";
+        const L_ROW_SEL  = "rgba(180,100,20,0.18)";
+        const L_ROW_HOV  = "rgba(140,80,10,0.10)";
+        const L_ROW_ALT  = "rgba(255,200,100,0.015)";
+
+        const PREV_W = 172;
+        const LIST_X = CONT_X + PREV_W + 1;
+        const LIST_W = CONT_W - PREV_W - 1;
+        const lsel   = TRUCK_CATALOG[_layoutSelItem];
+
+        // ── Left: preset slots panel ──
+        // Header
+        ctx.fillStyle = "#0c0804"; ctx.fillRect(CONT_X, BODY_Y, PREV_W, 22);
+        ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(CONT_X, BODY_Y + 22); ctx.lineTo(CONT_X + PREV_W, BODY_Y + 22); ctx.stroke();
+        ctx.fillStyle = "#2a1806"; ctx.fillRect(CONT_X, BODY_Y, 3, 22);
+        ctx.textAlign = "left"; ctx.fillStyle = L_BRIGHT; ctx.font = "bold 8px monospace";
+        ctx.fillText("SAVED PRESETS", CONT_X + 10, BODY_Y + 14);
+        ctx.fillStyle = L_DIM; ctx.font = "7px monospace"; ctx.textAlign = "right";
+        ctx.fillText("0 / 3 SAVED", CONT_X + PREV_W - 8, BODY_Y + 14);
+
+        // 3 preset slots
+        const SLOT_H = 52, SLOT_GAP = 6, SLOT_Y0 = BODY_Y + 28;
+        const PRESET_LABELS = ["PRESET A", "PRESET B", "PRESET C"];
+        for (let pi = 0; pi < 3; pi++) {
+          const sy = SLOT_Y0 + pi * (SLOT_H + SLOT_GAP);
+          ctx.fillStyle = "#0e0a06"; ctx.fillRect(CONT_X + 8, sy, PREV_W - 16, SLOT_H);
+          ctx.strokeStyle = "#2a1808"; ctx.lineWidth = 0.5;
+          ctx.strokeRect(CONT_X + 8.5, sy + 0.5, PREV_W - 17, SLOT_H - 1);
+          ctx.fillStyle = "#1a0e06"; ctx.fillRect(CONT_X + 8, sy, PREV_W - 16, 14);
+          ctx.fillStyle = L_DIM; ctx.font = "bold 7px monospace"; ctx.textAlign = "left";
+          ctx.fillText(PRESET_LABELS[pi], CONT_X + 13, sy + 10);
+          ctx.fillStyle = "#2a1406"; ctx.font = "7px monospace"; ctx.textAlign = "right";
+          ctx.fillText("EMPTY", CONT_X + PREV_W - 13, sy + 10);
+          for (let di = 0; di < 3; di++) {
+            const dx = CONT_X + 18 + di * ((PREV_W - 36) / 3) + (PREV_W - 36) / 6;
+            const dy = sy + 33;
+            ctx.fillStyle = "#150d04"; ctx.beginPath(); ctx.arc(dx, dy, 9, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = "#2a1808"; ctx.lineWidth = 0.5;
+            ctx.beginPath(); ctx.arc(dx, dy, 9, 0, Math.PI*2); ctx.stroke();
+            ctx.fillStyle = "#2a1406"; ctx.font = "7px monospace"; ctx.textAlign = "center";
+            ctx.fillText((di+1).toString(), dx, dy + 3);
+          }
+        }
+
+        // SAVE CURRENT ROUND button
+        const saveBtnY = SLOT_Y0 + 3 * (SLOT_H + SLOT_GAP) + 4;
+        ctx.fillStyle = "#1a1006"; ctx.fillRect(CONT_X + 8, saveBtnY, PREV_W - 16, 20);
+        ctx.strokeStyle = "#4a2a08"; ctx.lineWidth = 0.5;
+        ctx.strokeRect(CONT_X + 8.5, saveBtnY + 0.5, PREV_W - 17, 19);
+        ctx.fillStyle = "#4a3010"; ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
+        ctx.fillText("SAVE ROUND AS PRESET", CONT_X + PREV_W/2, saveBtnY + 13);
+
+        ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(LIST_X, BODY_Y); ctx.lineTo(LIST_X, BODY_Y + BODY_H); ctx.stroke();
+
+        // ── Right: scrollable item list ──
+        const ROW_H  = 26;
+        const LVIS   = Math.floor(BODY_H / ROW_H);
+        _layoutListScroll = Math.max(0, Math.min(_layoutListScroll, Math.max(0, TRUCK_CATALOG.length - LVIS)));
+        _layoutItemRects  = [];
+
+        const LHDR = 32;
+        ctx.fillStyle = "#100a04"; ctx.fillRect(LIST_X, BODY_Y, LIST_W, LHDR);
+        ctx.fillStyle = "#140e06"; ctx.fillRect(LIST_X, BODY_Y, LIST_W, 16);
+        ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(LIST_X, BODY_Y + 16); ctx.lineTo(LIST_X + LIST_W, BODY_Y + 16); ctx.stroke();
+        ctx.fillStyle = "#4a2808"; ctx.font = "bold 8px monospace"; ctx.textAlign = "left";
+        ctx.fillText("PRESET BUILDER", LIST_X + 10, BODY_Y + 11);
+        ctx.fillStyle = "#4a3010"; ctx.font = "bold 8px monospace"; ctx.textAlign = "left";
+        ctx.fillText("AVAILABLE EQUIPMENT", LIST_X + 10, BODY_Y + 27);
+        ctx.textAlign = "right"; ctx.fillStyle = "#2a1808"; ctx.font = "8px monospace";
+        ctx.fillText((_layoutListScroll + 1) + "\u2013" + Math.min(_layoutListScroll + LVIS, TRUCK_CATALOG.length) + " / " + TRUCK_CATALOG.length, LIST_X + LIST_W - 8, BODY_Y + 27);
+        ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(LIST_X, BODY_Y + LHDR); ctx.lineTo(LIST_X + LIST_W, BODY_Y + LHDR); ctx.stroke();
+
+        const LROW_Y0 = BODY_Y + LHDR + 2;
+        ctx.save();
+        ctx.beginPath(); ctx.rect(LIST_X, LROW_Y0, LIST_W, BODY_H - LHDR - 2); ctx.clip();
+        for (let vi = 0; vi < LVIS; vi++) {
+          const ci = _layoutListScroll + vi;
+          if (ci >= TRUCK_CATALOG.length) break;
+          const entry  = TRUCK_CATALOG[ci];
+          const ry     = LROW_Y0 + vi * ROW_H;
+          const isSel  = ci === _layoutSelItem;
+          const isHov  = !isSel && _titleMx >= LIST_X && _titleMx <= LIST_X + LIST_W
+                         && _titleMy >= ry && _titleMy <= ry + ROW_H;
+          _layoutItemRects.push({ idx: ci, x: LIST_X, y: ry, w: LIST_W, h: ROW_H });
+          if (isSel) {
+            ctx.fillStyle = L_ROW_SEL; ctx.fillRect(LIST_X, ry, LIST_W, ROW_H - 1);
+            ctx.fillStyle = L_ACTIVE;  ctx.fillRect(LIST_X, ry, 3, ROW_H - 1);
+          } else if (isHov) {
+            ctx.fillStyle = L_ROW_HOV; ctx.fillRect(LIST_X, ry, LIST_W, ROW_H - 1);
+          } else if (vi % 2 === 0) {
+            ctx.fillStyle = L_ROW_ALT; ctx.fillRect(LIST_X, ry, LIST_W, ROW_H - 1);
+          }
+          ctx.strokeStyle = "#1a0e04"; ctx.lineWidth = 0.5;
+          ctx.beginPath(); ctx.moveTo(LIST_X + 6, ry + ROW_H - 1); ctx.lineTo(LIST_X + LIST_W - 6, ry + ROW_H - 1); ctx.stroke();
+          ctx.textAlign = "left";
+          ctx.fillStyle = isSel ? L_BRIGHT : (isHov ? "#806030" : L_DIM);
+          ctx.font = (isSel ? "bold " : "") + "10px monospace";
+          ctx.fillText(entry.name, LIST_X + 12, ry + 17);
+          ctx.fillStyle = isSel ? "#7a4820" : "#2a1808"; ctx.font = "7px monospace"; ctx.textAlign = "right";
+          ctx.fillText(entry.role, LIST_X + LIST_W - 16, ry + 17);
+        }
+        ctx.restore();
+
+        if (TRUCK_CATALOG.length > LVIS) {
+          const sbH    = BODY_H - LHDR - 2;
+          const thumbH = Math.max(20, sbH * LVIS / TRUCK_CATALOG.length);
+          const thumbY = LROW_Y0 + (_layoutListScroll / Math.max(1, TRUCK_CATALOG.length - LVIS)) * (sbH - thumbH);
+          ctx.fillStyle = "#0e0804"; ctx.fillRect(LIST_X + LIST_W - 6, LROW_Y0, 6, sbH);
+          ctx.fillStyle = "#4a2808"; ctx.fillRect(LIST_X + LIST_W - 5, thumbY, 4, thumbH);
+        }
       } else {
         // ── CHARACTER tab ──
         const cy2 = BODY_Y + BODY_H / 2;
@@ -7574,39 +7777,124 @@
     }
 
 
-    // ── Board content: INVESTIGATOR / START ROUND (fullscreen) ───────────────
+    // ── Board content: XP / PROFILE / START (fullscreen) ───────────────────
     function _drawPageProfile(bx, by, bw, bh) {
-      const PAD = 28;
-      const cx = bx + PAD, cy = by + PAD, cw = bw - PAD*2;
+      // Layout constants
+      const PAD   = 22;
+      const RIGHT_W = Math.floor(bw * 0.33);  // right column width (item list)
+      const LEFT_W  = bw - RIGHT_W - PAD;      // left+center area width
+      const SPLIT_X = bx + LEFT_W;             // x where right column starts
 
-      _tsNote(cx, cy + 8, 280, [
-        { text: "AGENT  #0001", bold: true, size: 12, color: "#1e1006" },
-        { text: "Rank:  Rookie",    size: 9,  color: "#5a4830" },
-        { text: "0 investigations completed", size: 8, color: "#7a6040" },
-      ]);
+      // ── MAP DISPLAY — top-left area ──────────────────────────────────────────
+      const selectedMap = MAP_REGISTRY.find(m => m.id === _selectedMapId) || MAP_REGISTRY[0];
+      const PW = 120, PH = 140;  // polaroid size
+      const polX = bx + PAD, polY = by + PAD + 2;
 
-      const xpY = cy + 88;
-      ctx.fillStyle = "#7a6040"; ctx.font = "8px monospace";
-      ctx.fillText("XP  —  LEVEL 1", cx, xpY);
-      const barW = cw;
-      ctx.fillStyle = "#18100a"; ctx.fillRect(cx, xpY+12, barW, 14);
-      ctx.strokeStyle = "#3a2812"; ctx.lineWidth = 1; ctx.strokeRect(cx+0.5, xpY+12.5, barW-1, 13);
-      const xpGrad = ctx.createLinearGradient(cx, 0, cx+barW, 0);
-      xpGrad.addColorStop(0, "#806020"); xpGrad.addColorStop(1, "#e8c030");
-      ctx.fillStyle = xpGrad; ctx.fillRect(cx, xpY+12, Math.floor(barW*0.08), 14);
-      ctx.fillStyle = "#5a4828"; ctx.font = "8px monospace"; ctx.textAlign = "right";
-      ctx.fillText("40 / 500 XP  ·  0 rounds", cx+barW, xpY+40);
+      // Polaroid frame
+      ctx.fillStyle = "rgba(0,0,0,0.30)";
+      ctx.fillRect(polX + 3, polY + 4, PW, PH);
+      ctx.fillStyle = "#f5f0e0";
+      ctx.fillRect(polX, polY, PW, PH);
+      const IMG_H = PH - 30;
+      _drawPolaroidThumbnail(polX + 5, polY + 5, PW - 10, IMG_H, selectedMap.playable);
+      ctx.fillStyle = "#e8dfc8";
+      ctx.fillRect(polX + 5, polY + 5 + IMG_H, PW - 10, PH - IMG_H - 10);
+      ctx.fillStyle = "#3a2810"; ctx.font = "bold 7px Georgia, serif"; ctx.textAlign = "center";
+      ctx.fillText(selectedMap.name, polX + PW/2, polY + PH - 8);
+      ctx.textAlign = "left";
+      // Thumbtack
+      _drawBlueThumbtack(polX + PW/2, polY - 2);
+
+      // Map name large text to the right of polaroid
+      const mapNameX = polX + PW + 16;
+      const mapNameY = polY + 28;
+      ctx.fillStyle = "rgba(0,0,0,0.18)"; ctx.font = "bold 20px Georgia, serif";
+      ctx.fillText(selectedMap.name, mapNameX + 1, mapNameY + 1);
+      ctx.fillStyle = "#2a1808"; ctx.font = "bold 20px Georgia, serif";
+      ctx.fillText(selectedMap.name, mapNameX, mapNameY);
+      ctx.fillStyle = "#7a5830"; ctx.font = "10px Georgia, serif";
+      ctx.fillText(selectedMap.sub, mapNameX, mapNameY + 18);
+      // Decorative underline
+      ctx.strokeStyle = "#b09060"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(mapNameX, mapNameY + 24); ctx.lineTo(mapNameX + 200, mapNameY + 24); ctx.stroke();
+
+      // ── ID CARD — center-left, lower ──────────────────────────────────────────
+      const CARD_X = bx + PAD + 4;
+      const CARD_Y = polY + PH + 24;
+      const CARD_W = Math.min(LEFT_W - PAD, 280);
+      const CARD_H = 128;
+
+      // Card shadow + body
+      ctx.fillStyle = "rgba(0,0,0,0.32)";
+      ctx.fillRect(CARD_X + 3, CARD_Y + 4, CARD_W, CARD_H);
+      const cardBg = ctx.createLinearGradient(CARD_X, CARD_Y, CARD_X, CARD_Y + CARD_H);
+      cardBg.addColorStop(0, "#e8dfc8"); cardBg.addColorStop(1, "#d8cc9a");
+      ctx.fillStyle = cardBg; ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H);
+      ctx.strokeStyle = "#9a7a40"; ctx.lineWidth = 1;
+      ctx.strokeRect(CARD_X + 0.5, CARD_Y + 0.5, CARD_W - 1, CARD_H - 1);
+      // Red header bar
+      ctx.fillStyle = "#8a1010";
+      ctx.fillRect(CARD_X, CARD_Y, CARD_W, 18);
+      ctx.fillStyle = "#f0d0c0"; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+      ctx.fillText("PHANTOM RESPONSE UNIT  —  AGENT ID", CARD_X + CARD_W/2, CARD_Y + 12);
       ctx.textAlign = "left";
 
-      // BEGIN INVESTIGATION button
-      const btnW = Math.min(cw, 400), btnH = 52;
-      const btnX = bx + Math.floor((bw - btnW)/2), btnY = xpY + 56;
+      // Photo box (left side of card)
+      const PHOTO_SZ = 68;
+      const photoX = CARD_X + 10, photoY = CARD_Y + 24;
+      ctx.fillStyle = "#c0b090"; ctx.fillRect(photoX, photoY, PHOTO_SZ, PHOTO_SZ);
+      ctx.strokeStyle = "#9a7a40"; ctx.lineWidth = 0.5; ctx.strokeRect(photoX+0.5, photoY+0.5, PHOTO_SZ-1, PHOTO_SZ-1);
+      // Placeholder figure
+      ctx.fillStyle = "#8a7050";
+      ctx.beginPath(); ctx.arc(photoX + PHOTO_SZ/2, photoY + 20, 12, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(photoX + 8, photoY + PHOTO_SZ - 2);
+      ctx.quadraticCurveTo(photoX + PHOTO_SZ/2, photoY + 36, photoX + PHOTO_SZ - 8, photoY + PHOTO_SZ - 2);
+      ctx.fill();
+
+      // Agent info (right of photo)
+      const infoX = photoX + PHOTO_SZ + 10;
+      const infoY = CARD_Y + 28;
+      ctx.fillStyle = "#2a1808"; ctx.font = "bold 11px Georgia, serif";
+      ctx.fillText("AGENT  #0001", infoX, infoY);
+      ctx.fillStyle = "#5a3820"; ctx.font = "9px Georgia, serif";
+      ctx.fillText("Rank:  Rookie", infoX, infoY + 14);
+      ctx.fillStyle = "#7a5830"; ctx.font = "8px Georgia, serif";
+      ctx.fillText("Investigations:  0", infoX, infoY + 27);
+
+      // XP bar section
+      const barX  = infoX, barY = infoY + 40;
+      const barW  = CARD_W - (PHOTO_SZ + 28);
+      const xpPct = playerXPNext > 0 ? Math.min(playerXP / playerXPNext, 1) : 0;
+      // Level / XP labels above bar
+      ctx.fillStyle = "#3a2010"; ctx.font = "bold 8px monospace"; ctx.textAlign = "left";
+      ctx.fillText("Level " + playerLevel, barX, barY - 3);
+      ctx.fillStyle = "#5a3820"; ctx.font = "7px monospace"; ctx.textAlign = "right";
+      ctx.fillText(playerXP + " / " + playerXPNext + " XP", barX + barW, barY - 3);
+      ctx.textAlign = "left";
+      // Bar bg
+      ctx.fillStyle = "#b8a070"; ctx.fillRect(barX, barY, barW, 10);
+      ctx.strokeStyle = "#9a7a40"; ctx.lineWidth = 0.5; ctx.strokeRect(barX+0.5, barY+0.5, barW-1, 9);
+      // Bar fill
+      const xpGrad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+      xpGrad.addColorStop(0, "#906018"); xpGrad.addColorStop(1, "#e8c030");
+      ctx.fillStyle = xpGrad; ctx.fillRect(barX, barY, Math.floor(barW * xpPct), 10);
+
+      // Thumbtack on card
+      ctx.fillStyle = "#c82020";
+      ctx.beginPath(); ctx.arc(CARD_X + CARD_W/2, CARD_Y - 1, 5, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = "rgba(255,100,100,0.4)";
+      ctx.beginPath(); ctx.arc(CARD_X + CARD_W/2 - 1, CARD_Y - 2, 2, 0, Math.PI*2); ctx.fill();
+
+      // ── START BUTTON — bottom-right of center+left area ─────────────────────
+      const btnW = 210, btnH = 48;
+      const btnX = SPLIT_X - btnW - 20;
+      const btnY = by + bh - btnH - PAD - 10;
       const btnHov = _titleMx >= btnX && _titleMx <= btnX+btnW && _titleMy >= btnY && _titleMy <= btnY+btnH;
       _titleBeginRect = { x: btnX, y: btnY, w: btnW, h: btnH };
 
       ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(btnX+4, btnY+4, btnW, btnH);
-      ctx.fillStyle = btnHov ? "#2a4418" : "#1a3010";
-      ctx.fillRect(btnX, btnY, btnW, btnH);
+      ctx.fillStyle = btnHov ? "#2a4418" : "#1a3010"; ctx.fillRect(btnX, btnY, btnW, btnH);
       ctx.strokeStyle = btnHov ? "#98d858" : "#66a830"; ctx.lineWidth = 2.5;
       ctx.strokeRect(btnX+1, btnY+1, btnW-2, btnH-2);
       if (btnHov) { ctx.fillStyle = "rgba(100,210,40,0.06)"; ctx.fillRect(btnX+2, btnY+2, btnW-4, btnH-4); }
@@ -7614,12 +7902,303 @@
       ctx.font = "bold 14px monospace"; ctx.textAlign = "center";
       ctx.fillText("BEGIN INVESTIGATION", btnX+btnW/2, btnY+btnH/2+5);
       ctx.textAlign = "left";
-
+      // Hint lines below button
       const hint = isMobile ? "Tap to interact  ·  ESC: quit round"
                             : "WASD move  ·  E interact  ·  J journal  ·  ESC quit";
-      ctx.fillStyle = "#4a3818"; ctx.font = "8px monospace"; ctx.textAlign = "center";
-      ctx.fillText(hint, bx+bw/2, btnY+btnH+18);
-      ctx.fillText("ENTER to begin  ·  ← → navigate boards", bx+bw/2, btnY+btnH+32);
+      ctx.fillStyle = "#4a3818"; ctx.font = "7px monospace"; ctx.textAlign = "center";
+      ctx.fillText(hint, btnX + btnW/2, btnY + btnH + 14);
+      ctx.fillText("ENTER to begin  ·  ← → navigate boards", btnX + btnW/2, btnY + btnH + 26);
+      ctx.textAlign = "left";
+
+      // ── ITEM LIST — right column ──────────────────────────────────────────────
+      const LIST_ITEMS = [
+        "Video Camera", "Tripod", "Photo Camera", "Flashlight", "UV Flashlight",
+        "EMF Reader", "Thermometer", "D.O.T.S. Projector", "Ghost Book", "Spirit Box",
+        "Lighter", "Candle", "Incense", "Crucifix", "Sanity Pills",
+        "Sound Sensor", "Motion Sensor", "Head Camera", "Salt",
+      ];
+      const ITEM_STARS = {};  // placeholder — all items at 1 star for now
+      LIST_ITEMS.forEach(n => { ITEM_STARS[n] = 1; });
+
+      const LIST_X   = SPLIT_X + 8;
+      const LIST_Y   = by + PAD;
+      const LIST_W   = RIGHT_W - 16;
+      const ROW_H    = 17;
+      const LIST_H   = LIST_ITEMS.length * ROW_H + 28;
+
+      // Paper bg + shadow
+      ctx.fillStyle = "rgba(0,0,0,0.25)";
+      ctx.fillRect(LIST_X + 3, LIST_Y + 4, LIST_W, LIST_H);
+      ctx.fillStyle = "#f0e8cc";
+      ctx.fillRect(LIST_X, LIST_Y, LIST_W, LIST_H);
+      // Ruled lines
+      ctx.strokeStyle = "rgba(180,150,100,0.20)"; ctx.lineWidth = 0.5;
+      for (let ri = 1; ri < LIST_ITEMS.length + 1; ri++) {
+        const lineY = LIST_Y + 26 + ri * ROW_H;
+        ctx.beginPath(); ctx.moveTo(LIST_X + 6, lineY); ctx.lineTo(LIST_X + LIST_W - 6, lineY); ctx.stroke();
+      }
+      ctx.strokeStyle = "#b09060"; ctx.lineWidth = 0.8;
+      ctx.strokeRect(LIST_X + 0.5, LIST_Y + 0.5, LIST_W - 1, LIST_H - 1);
+      // Red left margin line
+      ctx.strokeStyle = "rgba(200,50,50,0.30)"; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(LIST_X + 22, LIST_Y + 2); ctx.lineTo(LIST_X + 22, LIST_Y + LIST_H - 2); ctx.stroke();
+      // Header
+      ctx.fillStyle = "#3a2010"; ctx.font = "bold 8px Georgia, serif"; ctx.textAlign = "center";
+      ctx.fillText("VAN INVENTORY", LIST_X + LIST_W/2, LIST_Y + 14);
+      ctx.strokeStyle = "rgba(160,120,60,0.40)"; ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.moveTo(LIST_X + 8, LIST_Y + 18); ctx.lineTo(LIST_X + LIST_W - 8, LIST_Y + 18); ctx.stroke();
+      // Thumbtack
+      ctx.fillStyle = "#c82020";
+      ctx.beginPath(); ctx.arc(LIST_X + LIST_W/2, LIST_Y - 1, 5, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = "rgba(255,100,100,0.4)";
+      ctx.beginPath(); ctx.arc(LIST_X + LIST_W/2 - 1, LIST_Y - 2, 2, 0, Math.PI*2); ctx.fill();
+
+      // Item rows
+      const STAR_FULL  = "★";  // filled star
+      const STAR_EMPTY = "☆";  // empty star
+      const MAX_STARS  = 4;
+      for (let ri = 0; ri < LIST_ITEMS.length; ri++) {
+        const name  = LIST_ITEMS[ri];
+        const stars = ITEM_STARS[name] || 0;
+        const ry    = LIST_Y + 26 + ri * ROW_H;
+        const ty    = ry + ROW_H - 4;
+        // Alternating row tint
+        if (ri % 2 === 0) { ctx.fillStyle = "rgba(0,0,0,0.025)"; ctx.fillRect(LIST_X + 1, ry, LIST_W - 2, ROW_H); }
+        // Item name
+        ctx.fillStyle = "#2a1808"; ctx.font = "8px Georgia, serif"; ctx.textAlign = "left";
+        ctx.fillText(name, LIST_X + 28, ty);
+        // Stars (right-aligned in the row)
+        const starStr = STAR_FULL.repeat(stars) + STAR_EMPTY.repeat(MAX_STARS - stars);
+        ctx.fillStyle = stars > 0 ? "#2a1808" : "#c0a878";
+        ctx.font = "9px monospace"; ctx.textAlign = "right";
+        ctx.fillText(starStr, LIST_X + LIST_W - 8, ty);
+      }
+      ctx.textAlign = "left";
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // LOCAL PROFILE SYSTEM — localStorage, djb2 hash, multi-profile
+    // ════════════════════════════════════════════════════════════════════
+    const PRU_PROFILES_KEY  = "pru_profiles_v1";
+    const PRU_LASTUSER_KEY  = "pru_last_user";
+    const PRU_SESSION_KEY   = "pru_active_session"; // auto-login: stores logged-in username key
+
+    function _profHashPass(s) {
+      let h = 5381;
+      for (let i = 0; i < s.length; i++) h = Math.imul((h << 5) + h, 1) + s.charCodeAt(i) | 0;
+      return (h >>> 0).toString(16).padStart(8, "0");
+    }
+    function _profLoadAll() {
+      try { return JSON.parse(localStorage.getItem(PRU_PROFILES_KEY) || "{}"); } catch { return {}; }
+    }
+    function _profSaveAll(p) {
+      try { localStorage.setItem(PRU_PROFILES_KEY, JSON.stringify(p)); } catch {}
+    }
+    function _profDefaultData(username) {
+      return { username, passwordHash: "", level: 1, xp: 0, xpNext: 500,
+               money: 0, investigations: 0, truckLoadout: [],
+               layoutPresets: [null, null, null], createdAt: Date.now() };
+    }
+    function _profApply(data) {
+      activeProfile = data;
+      playerLevel  = data.level  ?? 1;
+      playerXP     = data.xp     ?? 0;
+      playerXPNext = data.xpNext ?? 500;
+      playerMoney  = data.money  ?? 0;
+    }
+    function _profLogin(username, password) {
+      if (!username.trim()) return "Username cannot be empty.";
+      if (!password)         return "Password cannot be empty.";
+      const all = _profLoadAll(), key = username.trim().toLowerCase();
+      if (!all[key]) return "No profile found for that username.";
+      if (all[key].passwordHash !== _profHashPass(password)) return "Incorrect password.";
+      _profApply(all[key]);
+      try { localStorage.setItem(PRU_LASTUSER_KEY, key); } catch {}
+      try { localStorage.setItem(PRU_SESSION_KEY,  key); } catch {}
+      return null;
+    }
+    function _profCreate(username, password, confirm) {
+      const name = username.trim();
+      // ── Username validation ────────────────────────────────────────────
+      if (!name)                          return "Username cannot be empty.";
+      if (name.length < 3)                return "Username must be at least 3 characters.";
+      if (name.length > 16)               return "Username must be 16 characters or fewer.";
+      if (!/^[A-Za-z0-9_]+$/.test(name)) return "Only letters, numbers, and _ are allowed.";
+      // ── Password validation ────────────────────────────────────────────
+      if (!password)            return "Password cannot be empty.";
+      if (password.length < 4) return "Password must be at least 4 characters.";
+      if (password !== confirm) return "Passwords do not match.";
+      const all = _profLoadAll(), key = name.toLowerCase();
+      if (all[key]) return "That username is already taken.";
+      const data = _profDefaultData(name);
+      data.passwordHash = _profHashPass(password);
+      all[key] = data;
+      _profSaveAll(all);
+      _profApply(data);
+      try { localStorage.setItem(PRU_LASTUSER_KEY, key); } catch {}
+      try { localStorage.setItem(PRU_SESSION_KEY,  key); } catch {}
+      return null;
+    }
+    function _profSubmit() {
+      _profError = "";
+      const err = _profPhase === "login"
+        ? _profLogin(_profUser, _profPass)
+        : _profCreate(_profUser, _profPass, _profConfirm);
+      if (err) { _profError = err; return; }
+      menuPhase = "title"; titleScreenActive = true;
+    }
+
+    function drawMenuProfile() {
+      const W = canvas.width, H = canvas.height;
+
+      // ── Background: dark textured ─────────────────────────────────────────────
+      ctx.fillStyle = "#0a0806"; ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = "rgba(140,100,40,0.030)"; ctx.lineWidth = 1;
+      for (let gy = 0; gy < H; gy += 8) { ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke(); }
+      const vig = ctx.createRadialGradient(W/2,H/2,H*0.1,W/2,H/2,H*0.78);
+      vig.addColorStop(0,"rgba(0,0,0,0)"); vig.addColorStop(1,"rgba(0,0,0,0.72)");
+      ctx.fillStyle = vig; ctx.fillRect(0,0,W,H);
+
+      // ── Layout: two-column card — near full canvas ─────────────────────────
+      const CW = 760, CH = 520;
+      const CX = Math.floor((W - CW) / 2);
+      const CY = Math.floor((H - CH) / 2);
+
+      // Card shadow + body
+      ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(CX+6, CY+7, CW, CH);
+      const cg = ctx.createLinearGradient(CX, CY, CX, CY+CH);
+      cg.addColorStop(0, "#1e1810"); cg.addColorStop(1, "#120e08");
+      ctx.fillStyle = cg; ctx.fillRect(CX, CY, CW, CH);
+      ctx.strokeStyle = "#5a3a18"; ctx.lineWidth = 2;
+      ctx.strokeRect(CX+0.5, CY+0.5, CW-1, CH-1);
+      ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.8;
+      ctx.strokeRect(CX+7.5, CY+7.5, CW-15, CH-15);
+
+      // ── Header bar ───────────────────────────────────────────────────────────
+      const HDR_H = 62;
+      ctx.fillStyle = "#3a1808"; ctx.fillRect(CX, CY, CW, HDR_H);
+      ctx.strokeStyle = "#6a3010"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(CX, CY+HDR_H); ctx.lineTo(CX+CW, CY+HDR_H); ctx.stroke();
+      ctx.fillStyle = "#8a2010"; ctx.fillRect(CX, CY, 6, HDR_H);
+      ctx.fillStyle = "#c8a060"; ctx.font = "bold 20px monospace"; ctx.textAlign = "left";
+      ctx.fillText("PHANTOM RESPONSE UNIT", CX+22, CY+27);
+      ctx.fillStyle = "#8a5830"; ctx.font = "11px monospace";
+      ctx.fillText("AGENT IDENTIFICATION SYSTEM  —  LOCAL PROFILE", CX+22, CY+48);
+
+      // ── Two-column layout ─────────────────────────────────────────────────
+      const BODY_Y = CY + HDR_H + 1;
+      const BODY_H = CH - HDR_H - 1;
+      const COL_DIV = CX + Math.floor(CW * 0.42);
+      const L_PAD = 32, R_PAD = 32;
+
+      // Vertical divider
+      ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(COL_DIV, BODY_Y+20); ctx.lineTo(COL_DIV, BODY_Y+BODY_H-20); ctx.stroke();
+
+      // ── LEFT COLUMN: identity badge / PRU info ────────────────────────────
+      const LC_X = CX + L_PAD, LC_W = COL_DIV - CX - L_PAD - 12;
+
+      const embX = LC_X + LC_W/2, embY = BODY_Y + 92;
+      // Outer rings
+      ctx.strokeStyle = "#6a3a10"; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(embX, embY, 68, 0, Math.PI*2); ctx.stroke();
+      ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(embX, embY, 61, 0, Math.PI*2); ctx.stroke();
+      ctx.fillStyle = "#1a1008"; ctx.beginPath(); ctx.arc(embX, embY, 60, 0, Math.PI*2); ctx.fill();
+      // PRU initials
+      ctx.fillStyle = "#8a5020"; ctx.font = "bold 36px monospace"; ctx.textAlign = "center";
+      ctx.fillText("PRU", embX, embY + 12);
+      ctx.fillStyle = "#5a3010"; ctx.font = "8px monospace";
+      ctx.fillText("PHANTOM RESPONSE UNIT", embX, embY + 32);
+
+      // Info lines below emblem
+      const infoLines = [
+        { text: "LOCAL PROFILE SYSTEM",       bold: true,  color: "#8a6030", size: 12 },
+        { text: "Create or log in to your",   bold: false, color: "#5a3820", size: 11 },
+        { text: "saved investigation profile.", bold: false, color: "#5a3820", size: 11 },
+        { text: "",                            bold: false, color: "",        size: 11 },
+        { text: "Your XP, level, and loadout", bold: false, color: "#3a2410", size: 10 },
+        { text: "are saved to your profile.",  bold: false, color: "#3a2410", size: 10 },
+      ];
+      let infoLY = BODY_Y + 184;
+      for (const ln of infoLines) {
+        if (!ln.text) { infoLY += 8; continue; }
+        ctx.fillStyle = ln.color;
+        ctx.font = (ln.bold?"bold ":"") + ln.size + "px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(ln.text, LC_X + LC_W/2, infoLY);
+        infoLY += ln.size + 8;
+      }
+
+      // Bottom rule
+      ctx.strokeStyle = "#3a2010"; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(LC_X+24, BODY_Y+BODY_H-28); ctx.lineTo(LC_X+LC_W-24, BODY_Y+BODY_H-28); ctx.stroke();
+      ctx.fillStyle = "#3a2010"; ctx.font = "8px monospace"; ctx.textAlign = "center";
+      ctx.fillText("LOCAL SAVE · MULTI-PROFILE", LC_X+LC_W/2, BODY_Y+BODY_H-14);
+
+      // ── RIGHT COLUMN: form ────────────────────────────────────────────────
+      const RC_X = COL_DIV + R_PAD, RC_W = CX + CW - COL_DIV - R_PAD - 20;
+      _profBtnRects = [];
+
+      // Tab switcher
+      const TW = Math.floor(RC_W/2) - 5, TH = 40, TY = BODY_Y + 22;
+      const tabs = [["tab_login", RC_X, "LOG IN"], ["tab_create", RC_X + TW + 10, "CREATE PROFILE"]];
+      for (const [tid, tx, lbl] of tabs) {
+        const act = tid==="tab_login" ? _profPhase==="login" : _profPhase==="create";
+        ctx.fillStyle = act ? "#2a1808" : "#160e06"; ctx.fillRect(tx, TY, TW, TH);
+        ctx.strokeStyle = act ? "#c87820" : "#3a2010"; ctx.lineWidth = act ? 1.5 : 0.5;
+        ctx.strokeRect(tx+0.5, TY+0.5, TW-1, TH-1);
+        if (act) { ctx.fillStyle = "#c87820"; ctx.fillRect(tx, TY+TH-2, TW, 2); }
+        ctx.fillStyle = act ? "#f0c060" : "#4a2810";
+        ctx.font = "bold 12px monospace"; ctx.textAlign = "center";
+        ctx.fillText(lbl, tx+TW/2, TY+TH/2+5);
+        _profBtnRects.push({id:tid, x:tx, y:TY, w:TW, h:TH});
+      }
+
+      // Fields
+      const FX = RC_X, FW = RC_W, FH = 42;
+      const LABEL_H = 20;
+      let FY = TY + TH + 24;
+
+      const drawField = (label, value, fieldKey, isPass) => {
+        const isFoc = _profFocus === fieldKey;
+        ctx.fillStyle = "#7a5030"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left";
+        ctx.fillText(label, FX, FY + LABEL_H - 4);
+        FY += LABEL_H;
+        ctx.fillStyle = isFoc ? "#1e1208" : "#130e08"; ctx.fillRect(FX, FY, FW, FH);
+        ctx.strokeStyle = isFoc ? "#c87820" : "#4a2a10"; ctx.lineWidth = isFoc ? 2 : 0.8;
+        ctx.strokeRect(FX+0.5, FY+0.5, FW-1, FH-1);
+        const disp = isPass ? "•".repeat(value.length) : value;
+        const cur  = isFoc && Math.floor(Date.now()/530)%2===0 ? "|" : "";
+        ctx.fillStyle = "#e0b870"; ctx.font = "16px monospace"; ctx.textAlign = "left";
+        ctx.fillText(disp+cur, FX+12, FY+28);
+        _profBtnRects.push({id:"field_"+fieldKey, x:FX, y:FY, w:FW, h:FH});
+        FY += FH + 18;
+      };
+
+      drawField("USERNAME", _profUser, "user", false);
+      drawField("PASSWORD", _profPass, "pass", true);
+      if (_profPhase === "create") drawField("CONFIRM PASSWORD", _profConfirm, "confirm", true);
+
+      // Error line
+      if (_profError) {
+        ctx.fillStyle = "#c04040"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center";
+        ctx.fillText(_profError, FX + FW/2, FY + 6);
+        FY += 24;
+      } else { FY += 10; }
+
+      // Submit button
+      const BH = 50, BY = FY;
+      const bhov = _titleMx>=FX && _titleMx<=FX+FW && _titleMy>=BY && _titleMy<=BY+BH;
+      ctx.fillStyle = bhov ? "#2a4018" : "#1a2c10"; ctx.fillRect(FX, BY, FW, BH);
+      ctx.strokeStyle = bhov ? "#88c840" : "#4a8018"; ctx.lineWidth = 1.5;
+      ctx.strokeRect(FX+0.5, BY+0.5, FW-1, BH-1);
+      if (bhov) { ctx.fillStyle = "rgba(100,220,40,0.07)"; ctx.fillRect(FX+2, BY+2, FW-4, BH-4); }
+      ctx.fillStyle = bhov ? "#a8e860" : "#78c030";
+      ctx.font = "bold 17px monospace"; ctx.textAlign = "center";
+      ctx.fillText(_profPhase==="login" ? "LOG IN" : "CREATE PROFILE", FX+FW/2, BY+BH/2+6);
+      _profBtnRects.push({id:"submit", x:FX, y:BY, w:FW, h:BH});
+
       ctx.textAlign = "left";
     }
 
@@ -10257,7 +10836,8 @@
 
     // --- Game Loop ---
     function loop() {
-      if (menuPhase === "title")      { drawMenuTitle(); }
+      if (menuPhase === "profile")    { drawMenuProfile(); }
+      else if (menuPhase === "title")      { drawMenuTitle(); }
       else if (menuPhase === "corkboard") { drawMenuCorkboard(); }
       else if (lostRound)     drawLose();
       else if (roundOver)     drawResult();
@@ -10282,7 +10862,25 @@
       requestAnimationFrame(loop); // always keep running
     }
 
-    // Start the loop immediately — draws title screen until player begins
+    // Auto-login returning players; fall back to pre-filling username field
+    (function() {
+      try {
+        const session = localStorage.getItem(PRU_SESSION_KEY);
+        if (session) {
+          const all = _profLoadAll();
+          if (all[session]) {
+            _profApply(all[session]);
+            menuPhase = "title"; titleScreenActive = true;
+            return;
+          }
+          // Session key points to deleted profile — clear it
+          localStorage.removeItem(PRU_SESSION_KEY);
+        }
+        const last = localStorage.getItem(PRU_LASTUSER_KEY);
+        if (last) { _profUser = last; _profFocus = "pass"; }
+      } catch {}
+    })();
+    // Start the loop — profile screen first, then title after login
     loopRunning = true;
     loop();
   </script>
