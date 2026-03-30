@@ -179,7 +179,7 @@
 
     // --- Ghost roster config ---
     const GHOST_CONFIG = {
-      forceUltimateGhost:            false,  // overrides everything; uses Ultimate Ghost
+      forceUltimateGhost:            true,   // overrides everything; uses Ultimate Ghost
       enableNormalGhostRoster:       true,   // flip to true to go live with 27-ghost roster
       normalGhostSelectionMode:      "random", // "random" | "weighted"
       removeUltimateGhostFromLiveRounds: true,
@@ -1832,8 +1832,14 @@
       currentGhost = selectGhostForRound();
       ghostLog("pickGhost() assigned:", currentGhost.name);
 
-      const interior = rooms.filter(r => r.w >= 80 && r.h >= 80 && r.w < 400 && r.h < 400);
-      ghostFavRoom = interior[Math.floor(Math.random() * interior.length)] || rooms[0];
+      // TEST OVERRIDE — ultimate ghost always uses the Foyer for easy testing access
+      if (GHOST_CONFIG.forceUltimateGhost) {
+        ghostFavRoom = rooms.find(r => r.label === "Foyer") || rooms[0];
+        ghostLog("Test override: ghostFavRoom forced to", ghostFavRoom.label);
+      } else {
+        const interior = rooms.filter(r => r.w >= 80 && r.h >= 80 && r.w < 400 && r.h < 400);
+        ghostFavRoom = interior[Math.floor(Math.random() * interior.length)] || rooms[0];
+      }
 
       ghostX = ghostFavRoom.x + ghostFavRoom.w / 2;
       ghostY = ghostFavRoom.y + ghostFavRoom.h / 2;
@@ -2518,13 +2524,16 @@
         // Periodic interaction check
         ghostEventTimer -= delta;
         if (ghostEventTimer <= 0) {
-          // Debug ghost: fire every 2s with 100% success; normal: 7–16s at 70%/25%
-          // activityRate > 1.0 means more frequent events (e.g. Demon 1.5); < 1.0 means rarer
-          ghostEventTimer = (7 + Math.random() * 9) / beh.activityRate;
+          // Ultimate test ghost: fire every 2s guaranteed; normal: 7–16s at 70%/25%
+          if (GHOST_CONFIG.forceUltimateGhost) {
+            ghostEventTimer = 2;
+          } else {
+            ghostEventTimer = (7 + Math.random() * 9) / beh.activityRate;
+          }
           const inFav = (ghostX > ghostFavRoom.x && ghostX < ghostFavRoom.x + ghostFavRoom.w &&
                          ghostY > ghostFavRoom.y && ghostY < ghostFavRoom.y + ghostFavRoom.h);
-          // roamTendency < 1.0 means ghost is less likely to fire events when outside its room
-          if (Math.random() < (inFav ? 0.70 : 0.25 * beh.roamTendency)) {
+          // Ultimate test ghost always fires; normal: roamTendency scales out-of-room chance
+          if (GHOST_CONFIG.forceUltimateGhost || Math.random() < (inFav ? 0.70 : 0.25 * beh.roamTendency)) {
             const ev = currentGhost.evidence;
 
             // EMF — ghost interaction leaves a located source near ghost position
@@ -2604,8 +2613,9 @@
                                            ghostY > curRoom.y && ghostY < curRoom.y + curRoom.h);
           const roomIdx      = curRoom ? rooms.indexOf(curRoom) : -1;
           const lightsOff    = roomIdx < 0 || !roomLights[roomIdx]?.on;
-          // DEBUG: bypass lights check only; room and range still apply so position matters
-          const conditionsMet = holdingBox && hasEvidence && withinRange && ghostRoom && lightsOff;
+          // Ultimate test ghost: bypass lights-off requirement; room + range still apply
+          const conditionsMet = holdingBox && hasEvidence && withinRange && ghostRoom &&
+                                (lightsOff || GHOST_CONFIG.forceUltimateGhost);
           const responseChance = 0.65;
           if (conditionsMet && Math.random() < responseChance) {
             spiritBoxTimer      = 3.5;
