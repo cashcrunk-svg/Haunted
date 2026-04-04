@@ -130,10 +130,9 @@
       interact:  { cx: 726, cy: 488, r: 32 },               // E — interact / open door
       use:       { cx: 648, cy: 528, r: 24 },               // R — use / toggle item
       sprint:    { cx: 648, cy: 452, r: 24 },               // sprint (hold)
-      journal:   { x: 688, y: 8, w: 104, h: 44 },          // "Journeys" — solid rect, top-right
-      cycleItem: { cx: 710, cy: 36,  r: 18 },               // Q — cycle inventory
-      flashlight:{ cx: 655, cy: 36,  r: 18 },               // F — flashlight
-      drop:      { cx: 600, cy: 36,  r: 16 },               // G — drop / place item
+      journal:   { x: 688, y: 8,   w: 104, h: 44 },        // Journal — solid rect, top-right
+      flashlight:{ cx: 772, cy: 452, r: 22 },               // F — flashlight (bottom-right grid)
+      drop:      { cx: 772, cy: 528, r: 22 },               // G — drop / place (bottom-right grid)
     };
 
     // ── Mobile UI settings ───────────────────────────────────────────────────
@@ -2344,7 +2343,6 @@
           if (_hitBtn(x, y, MOB.interact))    { _fireKey(keybinds.interact);  continue; }
           if (_hitBtn(x, y, MOB.use))         { _fireKey(keybinds.use);       continue; }
           if (_hitRect(x, y, MOB.journal))    { _fireKey(keybinds.journal);   continue; } // rect button
-          if (_hitBtn(x, y, MOB.cycleItem))   { _fireKey(keybinds.inventory); continue; }
           if (_hitBtn(x, y, MOB.flashlight))  { _fireKey(keybinds.flashlight);continue; }
           if (_hitBtn(x, y, MOB.drop))        { _fireKey(keybinds.drop);      continue; }
 
@@ -12846,7 +12844,6 @@
       _drawBtn(MOB.interact,   "E",       "#e8c97a", false);
       _drawBtn(MOB.use,        "R",       "#80c8a0", heldItemOn || heldItemUsing);
       _drawBtn(MOB.sprint,     "\u26A1",  "#ff9040", mobileSprinting);
-      _drawBtn(MOB.cycleItem,  "Q",       "#d0c080", false);
       _drawBtn(MOB.flashlight, "F",       "#f0d060", flashActive);
       _drawBtn(MOB.drop,       "G",       "#c08060", false);
 
@@ -12864,7 +12861,7 @@
         ctx.font        = `bold 14px monospace`;
         ctx.textAlign   = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText("Journeys", jb.x + jb.w / 2, jb.y + jb.h / 2);
+        ctx.fillText("Journal", jb.x + jb.w / 2, jb.y + jb.h / 2);
         ctx.textBaseline = "alphabetic";
       }
 
