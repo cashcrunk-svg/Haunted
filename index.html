@@ -130,7 +130,7 @@
       interact:  { cx: 726, cy: 488, r: 32 },               // E — interact / open door
       use:       { cx: 648, cy: 528, r: 24 },               // R — use / toggle item
       sprint:    { cx: 648, cy: 452, r: 24 },               // sprint (hold)
-      journal:   { cx: 770, cy: 36,  r: 22 },               // J — journal
+      journal:   { x: 688, y: 8, w: 104, h: 44 },          // "Journeys" — solid rect, top-right
       cycleItem: { cx: 710, cy: 36,  r: 18 },               // Q — cycle inventory
       flashlight:{ cx: 655, cy: 36,  r: 18 },               // F — flashlight
       drop:      { cx: 600, cy: 36,  r: 16 },               // G — drop / place item
@@ -2343,7 +2343,7 @@
           // ── Action buttons ──
           if (_hitBtn(x, y, MOB.interact))    { _fireKey(keybinds.interact);  continue; }
           if (_hitBtn(x, y, MOB.use))         { _fireKey(keybinds.use);       continue; }
-          if (_hitBtn(x, y, MOB.journal))     { _fireKey(keybinds.journal);   continue; }
+          if (_hitRect(x, y, MOB.journal))    { _fireKey(keybinds.journal);   continue; } // rect button
           if (_hitBtn(x, y, MOB.cycleItem))   { _fireKey(keybinds.inventory); continue; }
           if (_hitBtn(x, y, MOB.flashlight))  { _fireKey(keybinds.flashlight);continue; }
           if (_hitBtn(x, y, MOB.drop))        { _fireKey(keybinds.drop);      continue; }
@@ -12846,10 +12846,27 @@
       _drawBtn(MOB.interact,   "E",       "#e8c97a", false);
       _drawBtn(MOB.use,        "R",       "#80c8a0", heldItemOn || heldItemUsing);
       _drawBtn(MOB.sprint,     "\u26A1",  "#ff9040", mobileSprinting);
-      _drawBtn(MOB.journal,    "J",       "#a0b0e8", journalOpen);
       _drawBtn(MOB.cycleItem,  "Q",       "#d0c080", false);
       _drawBtn(MOB.flashlight, "F",       "#f0d060", flashActive);
       _drawBtn(MOB.drop,       "G",       "#c08060", false);
+
+      // ── Journeys button — solid filled rect, top-right corner ────────────
+      {
+        const jb = MOB.journal;
+        const active = journalOpen;
+        ctx.globalAlpha = active ? Math.min(1, mobOpacity * 1.5) : mobOpacity * 0.9;
+        ctx.fillStyle   = active ? "#a0b0e8" : "#1a2040";
+        ctx.beginPath();
+        ctx.roundRect(jb.x, jb.y, jb.w, jb.h, 8);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle   = active ? "#0a0f20" : "#a0b0e8";
+        ctx.font        = `bold 14px monospace`;
+        ctx.textAlign   = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("Journeys", jb.x + jb.w / 2, jb.y + jb.h / 2);
+        ctx.textBaseline = "alphabetic";
+      }
 
       if (!mobileLook.active && !mobileJoy.active) {
         ctx.globalAlpha = 0.18 * mobOpacity;
