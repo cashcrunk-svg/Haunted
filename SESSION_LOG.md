@@ -1,5 +1,301 @@
 # Session Log
 
+## 2026-04-05 — Session 161
+- Phase 51 — Ghost LOS + speed rebalance
+  - Replaced 350px distance check with room-identity check: `_roomAtPoint(ghost) === _roomAtPoint(player)` → `_hasLOS`
+  - `_huntLastKnownX/Y`: seeded when hunt starts, updated each frame ghost has LOS; ghost chases stale coords when sight is lost
+  - `ghostLastKnownRoom`: updated on LOS; ghost re-roams to it when hunt ends
+  - Give-up: `huntLostSightTimer` reaches `_huntGiveUpTime` (8s normal, 4s when hiding) → `_endHunt()` fires
+  - Speed: `huntSpeedBase 1.0 → 0.85` (search), `huntSpeedLOS 1.4 → 1.1` (chase); all per-ghost overrides scaled proportionally
+  - Deogen exception: `always_knows_player_pos` → `_alwaysKnows` bypasses same-room check
+  - Removed on-screen overlays: hunt text, presence flash badge, evidence notification overlays; ghost activity stays on minimap
+  - Fixed game-freeze: `playerOutside` was `draw()`-local; duplicated `const` in `update()` → ReferenceError; fixed by adding it to `update()` scope
+  - Fixed `isSprinting` ReferenceError: moved to module-level `let`; removed local `const` from `update()`; `sndFootstep`/`_tickAudio` can now read it
+
+## 2026-04-05 — Session 160
+- Phase 50 — Death sequence
+  - `_deathTimer`: 2.5s countdown initiated on ghost catch instead of immediate `_endRound(true)`
+  - `sndDeath()`: broadband static burst + high shriek + low subsonic thud; much louder/heavier than ghost scream
+  - Death overlay: instant red flash → fast black-in (0.4s) → "ELIMINATED" + "the ghost got you" fade in
+  - Controls frozen during death sequence (_deathTimer gate in movement block)
+  - `_endRound(true)` fires when timer expires; results popup appears over corkboard as normal
+
+## 2026-04-05 — Session 159
+- Phase 49 — Ghost presence detection
+  - `_roomAtPoint(ghostX, ghostY)` compared to `_roomAtPoint(player center)` each update frame
+  - Edge detect: `_prevGhostInRoom` → fires once when ghost transitions into player's room
+  - `sndColdWind()`: low noise + 48Hz rumble + staggered bass; plays on entry
+  - `ghostPresenceFlash = 3.0`: "PRESENCE FELT" cyan-white overlay (3s, fade-in/out); subtler than evidence flashes
+  - Gated on `safeTimeOver && !ghostHunting`
+
+## 2026-04-05 — Session 158
+- Guest button click handler wired (`_enterCorkboard()` on `b.id === "guest"`)
+- Start investigation was blocked because no localStorage session → `menuPhase = "profile"` → login gate
+- Guest button already rendered + registered in `_profBtnRects`; click handler was the missing piece
+
+## 2026-04-05 — Session 157
+- Phase 48 — Ghost status HUD badges (top-left, below evidence count)
+  - "GHOST ATTRACTED" amber pulsing badge when ghostAttractTimer > 0 && !ghostHunting; warns player ghost is heading their way
+  - Thaye age badge: shows "THAYE Xm (Y%)" where X = elapsed minutes, Y = current hunt threshold; color red <3m, amber 3-7m, green ≥7m (corresponds to tier drops)
+  - Badges stack dynamically below smudge badge
+
+## 2026-04-05 — Session 156
+- Phase 47 — Ghost activity heat map on minimap
+  - ghostActivityRooms: Map<room, cumulative_strength>; updated every time recordGhostActivity() fires
+  - Drawn as 6b in minimap pipeline — red (#ff3010) hottest, orange (#e07020) warm, dark red (#a04010) cool
+  - Alpha scales 0–32% based on normalized heat fraction; most active room is always fullest
+  - Gives players a way to identify ghost's favourite room from the van without entering the house
+
+## 2026-04-05 — Session 155
+- Phase 46 — Ghost scare events
+  - ghostScareTimer: initialized to 60–120s on round start; fires independently of evidence events
+  - On scare: ghostAppearTimer = 0.4s (brief flash), ghostHuntFlash = 0.6s (red screen tint), -5% sanity, sndGhostScream()
+  - sndGhostScream(): noise burst + descending sawtooth shriek with stagger
+  - Gated on safeTimeOver, ghost not hunting, ghost within 200px
+  - Resets to 60–180s after each scare
+
+## 2026-04-05 — Session 154
+- Phase 45 — Ghost Orb evidence polish
+  - orbSeenFlash: 2s blue-purple overlay "GHOST ORB DETECTED" on first orb sighting per round
+  - _orbSeenThisRound flag prevents repeated notifications; resets in startRound()
+  - Detection uses _orbsInCameraView() — same cone geometry as existing render, ensures badge matches screen
+  - Orb visual: outer pulsing halo (r=22, sin-animated), inner glow expanded to r=12, floor alpha 0.15→0.20
+  - All 7 canonical evidence types now have detection notifications
+
+## 2026-04-05 — Session 153
+- Phase 44 — Evidence detection flash expansions
+  - ghostWriteFlash: 2s purple overlay "GHOST WRITING DETECTED" when ghost writes in open book
+  - uvMarkFlash: 2s violet overlay "UV FINGERPRINT DETECTED" when new UV mark deposited on door
+  - freezingFlash: 2s cyan overlay "FREEZING TEMPERATURES DETECTED" on first thermometerReading ≤ 0°C
+  - All 6 evidence types now have detection notifications (EMF5, DOTS, GhostWrite, UV, Freezing from Phase 40/44; SpiritBox has its own overlay)
+
+## 2026-04-05 — Session 152
+- Phase 43 — Per-ghost hue tint on passive appearances
+  - getGhostHue(): 24-entry map of ghost names to hue-rotate degrees (Spirit 0°, Banshee 280°, Demon -20°, Yurei 160°, Oni -40°, etc.)
+  - Applied as CSS filter on passive ghostAppearTimer renders (non-hunt, non-warning)
+  - ctx.filter template: saturate(15%) sepia(0.5) hue-rotate({hue+180}deg) saturate(180%) brightness(0.85)
+  - Hunt warning stays orange, active hunt stays red — only passive tint uses ghost hue
+
+## 2026-04-05 — Session 151
+- Phase 42 — Crucifix charges system
+  - Crucifix now blocks hunt START (hunt roll passes → check crucifix → blocked with charge cost) instead of ending active hunt
+  - 2 charges per Crucifix item (charges field initialized on first use); spent state when charges reach 0
+  - Visual: cross dims to dark grey/brown when spent; 2 gold dot indicators below cross
+  - sndCrucifix(): three-tone holy ringing (880, 1760, 1320 Hz sine waves with stagger)
+  - "CRUCIFIX ACTIVATED" overlay: gold text + radial edge glow; 2.2s with fade-in/fade-out
+
+## 2026-04-05 — Session 150
+- Phase 41 — Oni + Myling specialRule implementations
+  - no_mist_form (Oni): ghostAppearTimer bumped to max(8) on ghost events; ghost stays fully visible much longer
+  - more_active_near_players (Oni): when player is < 120px away, effectiveRate = activityRate × 1.8 → event interval reduced from ~5.3s to ~2.9s average
+  - high_parabolic_activity (Myling): each ghost event spawns an extra EMF source (L2–4) and extra ghostInteractMark at ghost position
+
+## 2026-04-05 — Session 149
+- Phase 40 — Evidence detection flashes + hunt pressure scaling
+  - emfL5Flash: 2s overlay "EMF LEVEL 5 DETECTED" (red) on edge-detect of emfLevel reaching 5
+  - dotsFlash: 2s overlay "D.O.T.S. FIGURE DETECTED" (purple) on edge-detect of dotsDisturbTimer going > 0
+  - Both have 0.375s fade-in and 0.8s fade-out; appear below screen center (y+40..+56)
+  - Hunt check interval: non-Demon ghosts now scale 4-6s (full sanity) → 1.5-2.5s (zero sanity) for pressure
+
+## 2026-04-05 — Session 148
+- Phase 39 — Ghost interaction audio + flash appearance
+  - sndDoorCreak(): low sawtooth creak + noise burst; fires on regular ghost door open/close; ghost flashes 0.8s
+  - sndLightClick(): sharp noise burst + square tick; fires when ghost flips light switch; ghost flashes 0.6s
+  - Yurei door slam already had sndDoorSlam(); now also bumps ghostAppearTimer to 1.2s
+  - Brief ghost flash makes interactions feel visceral without cheap jumpscares
+
+## 2026-04-05 — Session 147
+- Phase 38 — Proximity audio events
+  - sndGhostBreath(): quiet hiss + soft tone; fires every 3.5–6.5s when ghost is within 90px and not hunting
+  - sndWhisper(): mid-freq noise burst + airy tone; fires every 8–20s when playerSanity < 20%
+  - sndGhostMoan(): low warble sawtooth; fires every 8–14s during active ghost hunt
+  - New timers: _sndBreathTimer, _sndWhisperTimer, _sndMoanTimer; all reset in startRound()
+
+## 2026-04-05 — Session 146
+- Phase 37 — Incense system polish
+  - smudge_extended_pacify: incensePacified now uses beh.incenseDuration (Spirit = 180s, others = 90s)
+  - smudge_room_trap (Yurei): on incense activation, resets ghostRoamTimer, sets ghostHomeTimer = full pacify duration; canMigrate gated on !(smudge_room_trap && incensePacified > 0)
+  - SMUDGED HUD badge: shown top-left below evidence badge while incensePacified > 0; countdown in seconds, pulsing alpha
+
+## 2026-04-05 — Session 145
+- Phase 36 — Evidence system polish
+  - newEvidenceFlash state: {name, timer 2.5s} set when player clicks neutral→confirmed in journal
+  - "NEW EVIDENCE CONFIRMED" + evidence name drawn center-screen with fade-in (0.375s) and fade-out (last 1s); dark strip background
+  - Evidence count badge: "EVIDENCE X/3" drawn below sanity bar (top-left HUD), always shown after safe time; green at 3, amber at 1-2, dim at 0
+  - Flash and badge reset properly in startRound()
+
+## 2026-04-05 — Session 144
+- Phase 35 — Ghost behavior visual events
+  - Onryo candle extinguish flash: orange radial burst (r 8→30px, 0.45s) at candle position when ghost snuffs it out
+  - Poltergeist throw arcs: small brown rectangle flies parabolic arc from ghost to EMF landing spot (0.35–0.55s duration); one arc per thrown item
+  - Both state arrays reset in startRound(); animations tick in update() using delta
+
+## 2026-04-05 — Session 143
+- Phase 34 — Hunting improvements
+  - Revenant LOS HUD: during active hunt, shows "IT SEES YOU" (red) when huntLostSightTimer==0, "SEARCHING" (blue) when ghost lost trail — only visible for Revenant (speed_jumps_on_los)
+  - Yokai voice detection HUD: pulsing "YOKAI HEARS YOU" warning when Spirit Box is listening AND Yokai is within 200px AND not hunting; helps player understand voice-aggression mechanic
+
+## 2026-04-05 — Session 142
+- Phase 33 — Ghost event visual interactions
+  - emfPulses[]: expanding ring visual (orange level 4, red level 5) spawned on EMF 4-5 events; radius expands 60px/s, alpha decays 2.5/s
+  - ghostInteractMarks[]: dark brown elliptical smear marks left at ghost position on interactNearby action; max 12; visible without tools
+  - Both arrays reset in startRound()
+
+## 2026-04-05 — Session 141
+- Phase 32 — Thermometer HUD + frost visual
+  - Temperature badge: shown below sanity bar when temp < 15°C; color-coded (white/cold blue/cyan freezing); includes ❄ icon when freezing
+  - Frost vignette: radial blue-white gradient at room edges when thermometerReading ≤ 0°C; intensity scales with depth below 0°C (max -6°C); animated sparkle dots from gameTime
+
+## 2026-04-05 — Session 140
+- Phase 31 — Footstep sounds
+  - sndFootstep(surface): wood/tile/concrete/grass/van surface detection from room label; sprint vol 0.10 vs walk 0.06
+  - sndGhostFootstep(): deeper creak+noise; fires at stride rate scaled by ghost huntSpeedLOS during hunt
+  - Myling (silent_hunt_footsteps) skips ghost footsteps entirely
+  - Player stride: 0.44s walk, 0.26s sprint; timer resets when player stops moving
+  - All wired in _tickAudio(); timers reset in startRound()
+
+## 2026-04-05 — Session 139
+- Phase 30 — Ambient soundscape
+  - sndCreak(): double-tone wood creak; fires every 6–16s in dark rooms (65% chance), 12–22s lit (30% chance)
+  - sndDrip(): water drip; fires every 4–12s in rooms labeled Bath/Laundry/Kitchen (55% chance)
+  - sndLowHeartbeat(): sub-bass dual pulse; fires when sanity < 30%, BPM scales with panic (40+sanity_deficit)
+  - All gated on safeTimeOver && !ghostHunting (no ambience during hunts — silence is scarier)
+  - Timers reset in startRound() with randomized offsets to stagger first occurrences
+
+## 2026-04-05 — Session 138
+- Phase 29 — Photo Camera evidence
+  - pegQty 0 → 1 (Photo Camera now available on pegboard)
+  - R key: detects Ghost/EMF Activity/Fingerprint/Salt Footprint/Ghost Writing/Freezing Temperature/D.O.T.S. Figure within 200px
+  - Each type captured once per round; photosTaken[] stores evidence types
+  - White screen flash (0.22s) with captured type label; sndPhotoShutter() click sound
+  - _endRound(): +25 XP for ghost photo, +10 XP per unique evidence photo type
+  - photoFlashTimer ticks in update loop; state reset in startRound()
+
+## 2026-04-05 — Session 137
+- Phase 28 — Spirit Box static + D.O.T.S. audio
+  - sndSpiritBoxStatic(): short radio noise burst every 100–160ms while spiritBoxListenTimer > 0
+  - sndSpiritBoxResponse(): three-tone frequency sweep on confirmed ghost response (spiritBoxTimer transition)
+  - sndDotsPing(): dual-harmonic soft ping when dotsDisturbTimer transitions from 0 to > 0
+  - All three wired in _tickAudio(delta) with transition flags (_sndPrevSBResp, _sndPrevDots)
+  - Reset flags in startRound()
+
+## 2026-04-05 — Session 136
+- Phase 27 — Audio system
+  - AudioContext created lazily on first keydown or click (browser autoplay policy)
+  - _playTone(freq, dur, vol, type, attack, release) — oscillator helper
+  - _playNoise(dur, vol, cutoffFreq) — white noise burst with lowpass filter
+  - Named sounds: sndEMFTick (rising-pitch clicks per level), sndHuntWarning (low two-beat drone), sndHuntPulse (heartbeat thud every 0.78s), sndGhostEvent (crackle), sndDoorSlam (thud), sndSaltCrunch (brief crunch)
+  - _tickAudio(delta): EMF tick timer scales with emfLevel; hunt warning fires once on transition; hunt pulse every 0.78s while ghostHunting; called at bottom of update()
+  - Ghost event crackle wired to ghostEventTimer branch
+  - Yurei door slam wired to closeDoor action execution
+  - Salt crunch wired to ghost step detection
+  - Audio state reset in startRound() (_sndPrevHunting, _sndPrevWarning, timers)
+
+## 2026-04-05 — Session 135
+- Phase 26 — Salt item
+  - pegQty 0 → 2 (Salt now available on the pegboard)
+  - World item visual: off-white elliptical granule mound; `it.stepped=true` shows darkened + drag scuff marks
+  - HUD icon: flat salt pile in _drawHUDIcon switch
+  - Ghost step detection: every frame after ghost moves, checks placed Salt within 18px; Wraith skips (no_footprints)
+  - On step: `saltIt.stepped = true`, pushes 3 UV marks tagged `salt:true` into uvMarks[]
+  - UV renderer split: fingerprints draw ridge arcs + palm smudge; salt footprints draw diffuse oval + 4 toe dots + heel blob
+
+## 2026-04-05 — Session 134
+- Phase 25 — Balance pass
+  - Demon `frequent_hunts`: hunt check interval 1.5–2.5s (was 3–5s)
+  - Power-off sanity multiplier: 1.6× → 1.35× (breaker starts OFF, early game was too punishing)
+  - Shade no-hunt radius: 60px → 80px (more distinctly shy, player investigating from 70px no longer provokes)
+  - Revenant `speed_jumps_on_los`: 0.4× speed when huntLostSightTimer>0 (lost trail), 2.1× when in LOS range
+  - Mare `turns_off_lights`: 3× extra action weight on `touchLightSwitch` when the nearby switch is currently ON
+  - Yurei `autonomously_closes_doors`: finds OPEN doors within 80px and adds `closeDoor` action (3× weight); executes by setting door.open=false
+
+## 2026-04-05 — Session 133
+- Phase 22 — Van minimap enhancements
+  - EMF hotspot blips: placed active EMF Readers within 150px of level 4–5 source show pulsing dot (orange=4, red=5)
+- Phase 23 — Round results XP
+  - XP level-up loop: each level costs 30% more XP; leveledUp flag triggers "LEVEL UP!" badge
+  - Results popup: level + LEVEL UP! badge, XP progress bar with fraction text
+- Phase 24 — Hiding mechanic
+  - hideTimer: counts up when player is still in a Closet/Walk-In room ≤120×120px
+  - HIDING indicator at top-left (yellow → green at full hide)
+  - Hiding reduces catch radius 18→10px; hunt LOS giveup time 5→3s when hideTimer > 3
+  - Noise decays 3× faster while hiding (playerNoise extra drain)
+  - hideTimer decays at 2×/s when moving or leaving the room
+
+## 2026-04-05 — Session 132
+- Phase 15 — Raiju: disrupts_electronics → turns off active items within 100px during hunt; occasional power cut
+- Phase 16 — The Twins: dual_presence → decoy EMF fires in second room every 8–22s; ghostSpecialState.twinRoomA/B assigned at setup
+- Phase 17 — The Mimic: copy_random_ghost → swaps form every 60–120s; getGhostBehavior now reads mimicTarget's behavior
+- Phase 18 — Moroi: speed scales 1.0×→2.0× with sanity loss; spirit box adds −5% on top of base −3%
+- Phase 19 — Hunt warning border: amber pulsing + "⚠ GHOST NEARBY ⚠"; hunt overlay now also shows remaining seconds
+- Phase 20 — Ghost breaker event: non-Jinn ghosts near breaker have 6% action chance to cut power
+- Misc: debug HUD shows Mimic current form + swap timer; null lines filtered from debug HUD array
+
+## 2026-04-05 — Session 131
+- Phase 7 — HUD + Ghost Special Rules
+  - Sanity bar: top-left screen-fixed, 90×7px, color-coded (green/yellow/red), label below
+  - Shade: no-hunt-when-group → won't hunt if player within 60px (shy near presence)
+  - Onryo: flame_blocks_hunt → threshold=0 if active Incense/Firelight within 180px of ghost
+  - Onryo: hunt_on_flame_extinguish → monitors flame count; 65% hunt trigger when last flame goes out, 1.5s warning
+- Phase 8 — More Ghost Special Rules
+  - Deogen: slows_near_target → fast (1.8×) at range, near-crawl (0.2×) within 30px, smooth lerp
+  - Hantu: speed_from_cold → 2.0× speed at <5°C, 0.8× at >15°C via thermometerReading
+  - Jinn: cant_turn_off_breaker → steers ghost away if within 60px of BREAKER_X/Y
+- Phase 9 — Poltergeist + Banshee
+  - Poltergeist: mass_throw_sanity_drain → 2–4 EMF spike scatter on roam, sanity drain (throwCount × 1.5%) if within 200px
+  - Banshee: wail_on_roam → −4% sanity drain + brief red tint if player within 250px at roam start
+- Phase 10 — Firelight Candle
+  - pegQty raised 0→2 (now available on pegboard)
+  - E-key interaction: lighter+lit→lights candle; E again→blows out
+  - Ghost passes within 50px: 30% chance per second to extinguish candle
+  - Active glow: warm flickering radial gradient when lit (uses gameTime for flicker)
+  - Contextual E prompt: "light candle" / "blow out candle" / "need lit Lighter"
+- Phase 11 — Sanity Meds
+  - R key when Sanity Meds held: consume item, +35% sanity via setSanity()
+  - HUD name suffix: " [R to use]" when selected
+- Phase 12 — Yokai Aggression
+  - Spirit Box response near Yokai: huntCooldown reduced by 8s
+- Phase 13 — Atmosphere
+  - Pre-event light flicker: subtle when ghostEventTimer < 1.5s (not during hunt)
+  - Power-off drain multiplier: ×1.6 when breaker is off (darker = more terrifying)
+- Phase 14 — Debug HUD
+  - Added: playerNoise%, power state, ghostStuckTimer to debug readout line
+
+## 2026-04-05 — Session 130
+- Phase 4 — Evidence audit
+  - EMF: held reader detects at 120px, placed active EMF Reader detects at 150px (player must be within 160px of placed reader to read it)
+  - Ghost Orb camera-only enforcement confirmed already working — no changes needed
+  - Freezing Temperatures thermometer system confirmed working — no changes needed
+- Phase 5 — Player systems
+  - Ouija break: 20% chance triggers a cursed hunt (no warning) when safeTimeOver; Demon immune (ouija_safe rule); hunt duration 25–35s
+  - Sprint sanity drain: +0.8%/s extra loss when sprinting in a dark (unlit) room on top of passive dark drain
+  - Held EMF Reader at level 4–5: makeNoise(0.4/s) — ghost can hear the device spiking
+  - Held Spirit Box while active: makeNoise(0.35/s) — ghost hears chatter
+- Phase 6 — Map/environment
+  - Breaker starts OFF at round start — player must find the garage breaker to restore power
+  - Room lights start randomized: ~40% on, ~60% off (felt off/ghost-influenced state)
+  - Breaker flip: makeNoise(0.6) — loud clunk alerts ghost
+  - Breaker prompt updated: color-coded ● POWER ON / ○ POWER OFF
+
+## 2026-04-05 — Session 129
+- Phase 1 — Core sanity plumbing
+  - Added setSanity(v) helper (clamps 0–100); drainSanity() for discrete events unchanged
+  - Routed all direct playerSanity mutations: startRound reset, passive drain (3 sites), voodoo pin, tarot fate/dawn/eclipse/saint/death
+  - Added finalSanity snapshot to _resultsPopup object; displayed in results popup below ghost type label
+  - Added gameRunning guard to passive drain block to prevent post-round ticks
+- Phase 2 — Hunt + sanity events
+  - Demon huntThreshold override → 100 (hunts at any sanity via quadratic curve)
+  - Added _huntCooldownMult() → 0.55 for Demon, 1.0 others
+  - Added _endHunt(cooldown) helper; replaced all 4 hunt-end sites (incense, crucifix, LOS loss, timeout)
+  - Event drain hooks: spirit box response −3%, EMF5 near player −2%, ghost writing −3%, ouija question −5%, ouija break −10%; all exempt for Demon on ouija (ouija_safe rule)
+  - Light flicker during huntWarning/ghostHunting: dual-frequency sin interference on powered lights
+- Phase 3 — Ghost AI
+  - Added ghostStuckTimer + playerNoise state variables; both reset in startRound()
+  - Added makeNoise(amount) + ghostHearNoise() helpers (Yokai threshold 0.25 vs 0.55 standard)
+  - Sprint footstep noise: 0.6/s sprinting, 0.15/s walking; decays 0.45/s; ghostHearNoise() called each frame
+  - Door slam noise: makeNoise(0.7) when player opens a door
+  - Stuck detection: ghostStuckTimer increments when fully blocked; after 2.5s teleports ghost to room center + recomputes path
+
 ## 2026-03-26 — Session 128
 - Handheld camera viewfinder mode + NV toggle
 - Removed PiP top-right box entirely

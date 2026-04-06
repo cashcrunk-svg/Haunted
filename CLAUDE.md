@@ -15,7 +15,6 @@
 - `SESSION_LOG.md` — session notes and decisions
 
 ## Rules
-- No multiplayer, no mobile — not now
 - Plain JS preferred (no heavy frameworks)
 - Ask before adding new dependencies
 - Update TASKS.md and SESSION_LOG.md each session
