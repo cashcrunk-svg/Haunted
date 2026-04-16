@@ -1,5 +1,44 @@
 # Session Log
 
+## 2026-04-16 — Session 166
+- Added pixel art silhouettes for all 7 previously-missing items in both `drawEquipment()` pegboard cards and `_drawShopItemIcon()` shop preview: Photo Camera, Salt, Firelight, Sound Sensor, Motion Sensor, Head Gear, Parabolic Microphone
+- Added Firelight and Parabolic Microphone to TRUCK_CATALOG, SHOP_CATALOG, and ITEM_MAX_QTY so they can be added/removed from the pre-game truck loadout tab
+- All items on the pegboard are pickupable via the existing click handler (no logic change needed)
+- Van pegboard (equipmentList) automatically reflects whatever was loaded in the pre-game TRUCK tab via `_roundLoadout` → `equipmentList` at game start
+
+## 2026-04-16 — Session 165
+- Flashlight distance falloff: fog gradient now starts dimming at 24px world (was 135px); aggressive stops ensure visible near/far difference even in small rooms
+- UV light: removed `_uvDark` overlay that was darkening already-lit areas; fixed premultiplied-alpha edge artifact by using same hue at zero-alpha for terminal gradient stop
+- Video camera blur: downscale-blur approach (1/4 res → blur → upscale) replaces full-canvas blur — ~16× cheaper; fixed `destination-in` composite mode not being reset across frames (caused blank blur from frame 2 onward)
+- Camera static: noise dots + horizontal scan tears overlaid on blur; pre-allocated canvases prevent per-frame GC pressure
+- Camera pixelation approach tried and reverted back to gaussian blur per user preference
+- Photo camera and objectives HUD disabled (code kept, `&& false` guards); video camera re-enabled for viewfinder/NV
+- Persistent save: `localStorage` saves `_selectedChar`, `_layoutPresets`, `_layoutActive`, `_roundLoadout` on every mutation; restored on page load
+- Door raycast light-leak fix: expanded door blocking rect by 8px along long axis in `_flRayDist` — covers the 6px gap between narrow door rect and wider doorway connector rect that was letting thin lines of light slip through on both sides of closed doors
+
+## 2026-04-07 — Session 164
+- Mode select cards: replaced placeholder photo areas with drawn scenes (lone investigator + flashlight for SP, 4 faded figures + "COMING SOON" stamp for MP, lit room + ghost book + arrow for Training)
+- Difficulty selector moved from map page to investigator page
+  - Removed full strip from `_drawPageMap`
+  - Replaced summary badge on `_drawPageProfile` with compact `‹ / ›` arrow picker
+  - Click handlers: arrows on page 2 cycle `_selectedDifficulty` ±1; removed old page-0 diff clicks
+- Map polaroid, map name scrap, and van inventory shifted down 20px on investigator page
+
+## 2026-04-07 — Session 163
+- PixelLab walk animations fully wired for all 6 characters
+  - Downloaded ZIPs for John, Chad, Tiffiny, Loren, Candy, Samuri → extracted to `sprites/characters/{name}/`
+  - Pre-load walk frames at page startup (`_plWalkImgs` cache); `_applyCharSprites()` uses cache instead of creating new Images
+  - `_applyCharSprites()` now called at game start (was only on photo-click — root bug causing no walk animation)
+  - `_drawPlayerSprite` fallback: if walk frame not loaded, try idle frame before procedural art
+  - Procedural pixel art character no longer appears when PixelLab char selected
+- Motel (Gallow's Inn) improvements
+  - All furniture removed from Map 1
+  - Door frame markers: 5px bright `#c89448` trim drawn on BOTH sides of every door after room edges, so doors visible from both rooms
+  - Red tint fixed: `sunrise`/`sunset` `bg` changed to neutral `#020205` (same as night); `fogColor` also neutralized; colored atmosphere only applies to outside directional light
+- Tool readout HUD moved from screen-center to bottom-center above inventory arc
+  - Thermometer, EMF Reader, Video Camera pills now anchor at `canvas.height - 30 - 24 - 52`, centered at `canvas.width/2`
+- Bug fix: `_nearWI` → `nearWI` typo on bone proximity prompt line
+
 ## 2026-04-06 — Session 162
 - Map 2 — Gallow's Inn: fully playable second map
   - `buildMap(id)` architecture: `_currentMapId` module-level var set from resolved `_mid`; all map data rebuilt each round
