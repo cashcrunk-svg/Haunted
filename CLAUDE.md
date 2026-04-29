@@ -9,10 +9,14 @@
 - Low-token workflow: be concise, don't over-explain
 
 ## File Guide
-- `GAME_IDENTITY.md` — what the game is
-- `PROJECT_PLAN.md` — milestones and structure
-- `TASKS.md` — current work items
-- `SESSION_LOG.md` — session notes and decisions
+- `README.md` — top-level orientation: how to run, where things live
+- `docs/GAME_IDENTITY.md` — what the game is
+- `docs/PROJECT_PLAN.md` — milestones and structure
+- `docs/TASKS.md` — current work items
+- `docs/SESSION_LOG.md` — session notes and decisions
+- `index.html` — the entire game (single file, vanilla JS canvas)
+- `audio/{music,ambient,sfx,voice}/` — sound assets grouped by purpose
+- `sprites/{characters,player,ghost,breaker}/` — pixel art
 
 ## Rules
 - Plain JS preferred (no heavy frameworks)
