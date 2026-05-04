@@ -44,7 +44,7 @@ async function main() {
     await waitForServer(BASE + "/index.html", 5000);
     console.log("[run-smoke] server up");
 
-    const tests = ["smoke.test.js", "gameplay-debug.test.js"];
+    const tests = ["smoke.test.js", "gameplay-debug.test.js", "debug-postcontract.test.js", "controls-debug.test.js"];
     let exitCode = 0;
     for (const t of tests) {
       console.log("\n[run-smoke] >>>", t);

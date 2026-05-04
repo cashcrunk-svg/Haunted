@@ -4,7 +4,7 @@
 2D pixel top-down horror investigation game (Phasmophobia-inspired). Browser-first, single-player.
 
 ## Priorities
-- Keep code beginner-readable
+- No complexity ceiling — write whatever's needed to do the job right
 - Small scope, no premature features
 - Low-token workflow: be concise, don't over-explain
 
